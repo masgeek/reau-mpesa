@@ -1,0 +1,17 @@
+{
+    "name": "tsobu/reu-mpesa",
+    "description": "MPESA plugin",
+    "type": "wordpress-plugin",
+    "license": "GPL2",
+    "authors": [
+        {
+            "name": "Sammy Barasa",
+            "email": "barsamms@gmail.com"
+        }
+    ],
+    "require": {
+        "knplabs/github-api": "^1.5",
+        "league/oauth2-github": "^0.2.0",
+        "guzzlehttp/guzzle": "^6.5"
+    }
+}
