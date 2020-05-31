@@ -64,7 +64,6 @@ function contact_form_func()
 }
 
 function mpesa_form_func($atts)
-
 {
 
     ob_start();
