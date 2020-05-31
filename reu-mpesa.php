@@ -12,123 +12,111 @@ License: GPL2
 
 defined('ABSPATH') or die('No script kiddies please!');
 
-require_once 'vendor/autoload.php';
+define('ACFSURL', WP_PLUGIN_URL . "/" . dirname(plugin_basename(__FILE__)));
 
-class MyGithub extends \Github\Client
+
+function enqueue_scripts_func()
 {
+
+    wp_enqueue_script('ajaxcontact', ACFSURL . '/js/ajaxcontact.js', array('jquery'));
+    wp_localize_script('ajaxcontact', 'ajaxcontactajax', array('ajaxurl' => admin_url('admin-ajax.php')));
 }
 
-;
+add_action('wp_enqueue_scripts', "enqueue_scripts_func");
 
-//create shortcodes
-function github_issues_func($atts, $gh = null)
+function contact_form_func()
 {
-    $gh = ($gh) ? $gh : new MyGithub();
-
-    $githubOrg = get_option("gh_org");
-    $repoName = get_option("gh_repo");
-
-    // Make the API call to get issues, passing in the GitHub owner and repository
-//    $issues = $gh->api('issue')->all('TransitScreen', 'wp-github-pipeline');
-
-    $issues = $gh->api("issue")->all($githubOrg, $repoName);
-
-    // Handle the case when there are no issues
-    if (empty($issues)) {
-        return "<strong>" . __("No issues to show", 'reu-mpesa') . "</strong>";
-    }
-
-    // We're going to return a string. First, we open a list.
-    $return = "<ol start='1'>";
-    // Loop over the returned issues
-    foreach ($issues as $issue) {
-
-        // Add a list item for each issue to the string
-        // (Feel free to get fancier here)
-        // Maybe make each one a link to the issue issuing $issue['url] )
-        $return .= "<li>{$issue['title']}</li>";
-
-    }
-    // Don't forget to close the list
-    $return .= "</ol>";
-
-    return $return;
-}
-
-add_shortcode("github_issues", "github_issues_func");
-
-//Register settings menu
-add_action("admin_menu", "gh_plugin_menu_func");
-function gh_plugin_menu_func()
-{
-    add_submenu_page("options-general.php",
-        "GitHub",
-        "GitHub",
-        "manage_options",
-        "github",
-        "gh_plugin_options"
-    );
-}
-
-//print markup for the page
-function gh_plugin_options()
-{
-    if (!current_user_can("manage_options")) {
-        wp_die(__("You do not have sufficient permissions to access this page."));
-    }
-
-    if (isset($_GET['status']) && $_GET['status'] == 'success') {
-        ?>
-        <div id="message" class="updated notice is-dismissible">
-            <p><?php _e("Settings updated!", "reu-mpesa"); ?></p>
-            <button type="button" class="notice-dismiss">
-                <span class="screen-reader-text"><?php _e("Dismiss this notice.", "reu-mpesa"); ?></span>
-            </button>
-        </div>
-        <?php
-    }
     ?>
+    <form id="ajaxcontactform" action="" method="post" enctype="multipart/form-data">
 
+        <div id="ajaxcontact-text">
 
-    <form method="post" action="<?php echo admin_url('admin-post.php'); ?>">
+            <div id="ajaxcontact-response" style="background-color:#E6E6FA ;color:blue;"></div>
 
-        <input type="hidden" name="action" value="update_github_settings"/>
+            <strong>Name </strong> <br/>
 
-        <h3><?php _e("GitHub Repository Info", "reu-mpesa"); ?></h3>
-        <p>
-            <label><?php _e("GitHub Organization:", "reu-mpesa"); ?></label>
-            <input class="" type="text" name="gh_org" value="<?php echo get_option('gh_org'); ?>"/>
-        </p>
+            <input type="text" id="ajaxcontactname" name="ajaxcontactname"/><br/>
 
-        <p>
-            <label><?php _e("GitHub repository (slug):", "reu-mpesa"); ?></label>
-            <input class="" type="text" name="gh_repo" value="<?php echo get_option('gh_repo'); ?>"/>
-        </p>
+            <br/>
 
-        <input class="button button-primary" type="submit" value="<?php _e("Save", "reu-mpesa"); ?>"/>
+            <strong>Email </strong> <br/>
 
+            <input type="text" id="ajaxcontactemail" name="ajaxcontactemail"/><br/>
+
+            <br/>
+
+            <strong>Subject </strong> <br/>
+
+            <input type="text" id="ajaxcontactsubject" name="ajaxcontactsubject"/><br/>
+
+            <br/>
+
+            <strong>Contents </strong> <br/>
+
+            <textarea id="ajaxcontactcontents" name="ajaxcontactcontents" rows="10" cols="20"></textarea><br/>
+
+            <a onclick="ajaxformsendmail(ajaxcontactname.value,ajaxcontactemail.value,ajaxcontactsubject.value,ajaxcontactcontents.value);"
+               style="cursor: pointer"><b>Send Mail</b></a>
+
+        </div>
     </form>
     <?php
 }
 
-add_action('admin_post_update_github_settings', 'github_handle_save');
+function mpesa_form_func($atts)
 
-function github_handle_save()
 {
-// Get the options that were sent
-    $org = (!empty($_POST["gh_org"])) ? $_POST["gh_org"] : NULL;
-    $repo = (!empty($_POST["gh_repo"])) ? $_POST["gh_repo"] : NULL;
 
-    // Validation would go here
+    ob_start();
 
-    // Update the values
-    update_option("gh_repo", $repo, TRUE);
-    update_option("gh_org", $org, TRUE);
+    contact_form_func();
 
-    // Redirect back to settings page
-    // The ?page=github corresponds to the "slug"
-    // set in the fourth parameter of add_submenu_page() above.
-    $redirect_url = get_bloginfo("url") . "/wp-admin/options-general.php?page=github&status=success";
-    header("Location: " . $redirect_url);
-    exit;
+    $output = ob_get_contents();
+
+    ob_end_clean();
+
+    return $output;
+
 }
+
+add_shortcode("mpesa_form", "mpesa_form_func");
+
+function ajaxcontact_send_mail()
+{
+    $results = '';
+    $error = 0;
+
+    $name = $_POST['acfname'];
+    $email = $_POST['acfemail'];
+    $subject = $_POST['acfsubject'];
+    $contents = $_POST['acfcontents'];
+    $admin_email = get_option('admin_email');
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $results = $email . " :email address is not valid.";
+        $error = 1;
+    } elseif (strlen($name) == 0) {
+        $results = "Name is invalid.";
+        $error = 1;
+    }
+
+    if ($error == 0) {
+        $headers = 'From:' . $email . "rn";
+        if (wp_mail($admin_email, $subject, $contents, $headers)) {
+            $results = "*Thanks for you mail.";
+        } else {
+            $results = "*The mail could not be sent.";
+        }
+    }
+
+    $resp = [
+        'names' => 'sammy',
+        'resp' => $results
+    ];
+    echo json_encode($resp);
+    die();
+}
+
+//Register ajax handlers
+add_action('wp_ajax_nopriv_ajaxcontact_send_mail', 'ajaxcontact_send_mail');
+add_action('wp_ajax_ajaxcontact_send_mail', 'ajaxcontact_send_mail');
