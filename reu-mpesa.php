@@ -25,8 +25,13 @@ function github_issues_func($atts, $gh = null)
 {
     $gh = ($gh) ? $gh : new MyGithub();
 
+    $githubOrg = get_option("gh_org");
+    $repoName = get_option("gh_repo");
+
     // Make the API call to get issues, passing in the GitHub owner and repository
-    $issues = $gh->api('issue')->all('TransitScreen', 'wp-github-pipeline');
+//    $issues = $gh->api('issue')->all('TransitScreen', 'wp-github-pipeline');
+
+    $issues = $gh->api("issue")->all($githubOrg, $repoName);
 
     // Handle the case when there are no issues
     if (empty($issues)) {
@@ -34,7 +39,7 @@ function github_issues_func($atts, $gh = null)
     }
 
     // We're going to return a string. First, we open a list.
-    $return = "<ul>";
+    $return = "<ol start='1'>";
     // Loop over the returned issues
     foreach ($issues as $issue) {
 
@@ -45,7 +50,7 @@ function github_issues_func($atts, $gh = null)
 
     }
     // Don't forget to close the list
-    $return .= "</ul>";
+    $return .= "</ol>";
 
     return $return;
 }
@@ -71,7 +76,20 @@ function gh_plugin_options()
     if (!current_user_can("manage_options")) {
         wp_die(__("You do not have sufficient permissions to access this page."));
     }
+
+    if (isset($_GET['status']) && $_GET['status'] == 'success') {
+        ?>
+        <div id="message" class="updated notice is-dismissible">
+            <p><?php _e("Settings updated!", "reu-mpesa"); ?></p>
+            <button type="button" class="notice-dismiss">
+                <span class="screen-reader-text"><?php _e("Dismiss this notice.", "reu-mpesa"); ?></span>
+            </button>
+        </div>
+        <?php
+    }
     ?>
+
+
     <form method="post" action="<?php echo admin_url('admin-post.php'); ?>">
 
         <input type="hidden" name="action" value="update_github_settings"/>
@@ -97,5 +115,20 @@ add_action('admin_post_update_github_settings', 'github_handle_save');
 
 function github_handle_save()
 {
+// Get the options that were sent
+    $org = (!empty($_POST["gh_org"])) ? $_POST["gh_org"] : NULL;
+    $repo = (!empty($_POST["gh_repo"])) ? $_POST["gh_repo"] : NULL;
 
+    // Validation would go here
+
+    // Update the values
+    update_option("gh_repo", $repo, TRUE);
+    update_option("gh_org", $org, TRUE);
+
+    // Redirect back to settings page
+    // The ?page=github corresponds to the "slug"
+    // set in the fourth parameter of add_submenu_page() above.
+    $redirect_url = get_bloginfo("url") . "/wp-admin/options-general.php?page=github&status=success";
+    header("Location: " . $redirect_url);
+    exit;
 }
