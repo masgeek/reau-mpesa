@@ -16,21 +16,51 @@ require_once 'vendor/autoload.php';
 
 define('ACFSURL', WP_PLUGIN_URL . "/" . dirname(plugin_basename(__FILE__)));
 
-class MyMpesa
-{
 
+add_action('wp_enqueue_scripts', "enqueue_scripts_func");
+
+function enqueue_scripts_funcOld()
+{
+    //wp_deregister_script('jquery-core');
+    //wp_register_script('jquery-core', ACFSURL . '/vendor/npm-asset/jquery/dist/jquery.js', array(), '3.5.1');
+    //wp_deregister_script('jquery-migrate');
+    //wp_register_script('jquery-migrate', ACFSURL . '/vendor/npm-asset/jquery-migrate/dist/jquery-migrate.js', array(), '3.3.0');
+
+//    wp_enqueue_script('ajaxcontact', ACFSURL . '/js/ajaxcontact.js', array('jquery'));
+    wp_enqueue_script('ajaxmpesa', ACFSURL . '/vendor/npm-asset/jquery-mask-plugin/dist/jquery.mask.js', array('jquery'), '1.14.16');
+    wp_enqueue_script('ajaxmpesa', ACFSURL . '/js/ajax-mpesa.js', array('jquery'), '1.1.0');
+
+
+//    wp_localize_script('ajaxcontact', 'ajaxcontactajax', array('ajaxurl' => admin_url('admin-ajax.php')));
+    wp_localize_script('ajaxmpesa', 'ajaxmpesaajax', array('ajaxurl' => admin_url('admin-ajax.php')));
 }
 
 function enqueue_scripts_func()
 {
+    wp_register_script('jqueryMask',
+        plugins_url('/vendor/npm-asset/jquery-mask-plugin/dist/jquery.mask.js', __FILE__),
+        array('jquery'),
+        '1.14.16',
+        true
+    );
 
-//    wp_enqueue_script('ajaxcontact', ACFSURL . '/js/ajaxcontact.js', array('jquery'));
-    wp_enqueue_script('ajaxmpesa', ACFSURL . '/js/ajax-mpesa.js', array('jquery'));
-//    wp_localize_script('ajaxcontact', 'ajaxcontactajax', array('ajaxurl' => admin_url('admin-ajax.php')));
-    wp_localize_script('ajaxmpesa', 'ajaxmpesatajax', array('ajaxurl' => admin_url('admin-ajax.php')));
+    wp_register_script(
+        'ajaxHandle',
+        plugins_url('/js/ajax-mpesa.js', __FILE__),
+        array('jquery'),
+        false,
+        true
+    );
+    wp_enqueue_script('jqueryMask');
+    wp_enqueue_script('ajaxHandle');
+
+    wp_localize_script(
+        'ajaxHandle',
+        'mpesaAjax',
+        array('ajaxurl' => admin_url('admin-ajax.php'))
+    );
 }
 
-add_action('wp_enqueue_scripts', "enqueue_scripts_func");
 
 function contact_form_func()
 {
@@ -49,8 +79,10 @@ function contact_form_func()
 
             <strong>Email </strong> <br/>
 
-            <input type="text" id="ajaxcontactemail" name="ajaxcontactemail"/><br/>
+            <input type="text" id="email" name="email" class="alpha-no-spaces"/><br/>
 
+            <input type="text" class="form-control phone" id="phone" name="phone"
+                   placeholder="Enter Phone number" required="required">
             <br/>
 
             <strong>Subject </strong> <br/>
@@ -63,7 +95,11 @@ function contact_form_func()
 
             <textarea id="ajaxcontactcontents" name="ajaxcontactcontents" rows="10" cols="20"></textarea><br/>
 
-            <a onclick="ajaxformsendmail(ajaxcontactname.value,ajaxcontactemail.value,ajaxcontactsubject.value,ajaxcontactcontents.value);"
+            <button type="button" class="button wp-generate-pw hide-if-no-js">Generate Password</button>
+
+            <button type="button" class="button wpforms-form" id="stk-button">Checkout</button>
+
+            <a onclick="sendMpesaSTKRequest();"
                style="cursor: pointer"><b>Send Mail</b></a>
 
         </div>

@@ -1,5 +1,7 @@
 {
   "dependencies": {
-    "jquery-mask-plugin": "^1.14.16"
+    "jquery": "^3.5.1",
+    "jquery-mask-plugin": "^1.14.16",
+    "jquery-migrate": "^3.3.0"
   }
 }
