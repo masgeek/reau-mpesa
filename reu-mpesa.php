@@ -12,14 +12,22 @@ License: GPL2
 
 defined('ABSPATH') or die('No script kiddies please!');
 
+require_once 'vendor/autoload.php';
+
 define('ACFSURL', WP_PLUGIN_URL . "/" . dirname(plugin_basename(__FILE__)));
 
+class MyMpesa
+{
+
+}
 
 function enqueue_scripts_func()
 {
 
-    wp_enqueue_script('ajaxcontact', ACFSURL . '/js/ajaxcontact.js', array('jquery'));
-    wp_localize_script('ajaxcontact', 'ajaxcontactajax', array('ajaxurl' => admin_url('admin-ajax.php')));
+//    wp_enqueue_script('ajaxcontact', ACFSURL . '/js/ajaxcontact.js', array('jquery'));
+    wp_enqueue_script('ajaxmpesa', ACFSURL . '/js/ajax-mpesa.js', array('jquery'));
+//    wp_localize_script('ajaxcontact', 'ajaxcontactajax', array('ajaxurl' => admin_url('admin-ajax.php')));
+    wp_localize_script('ajaxmpesa', 'ajaxmpesatajax', array('ajaxurl' => admin_url('admin-ajax.php')));
 }
 
 add_action('wp_enqueue_scripts', "enqueue_scripts_func");
