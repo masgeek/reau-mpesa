@@ -26,10 +26,6 @@ jQuery(document).ready(function ($) {
 
     function sendMpesaSTKRequest() {
         const formData = jQuery('#mpesa-form').serializeArray();
-        // var formData = {
-        //     action: 'ajaxcontact_send_mail',
-        //     email: "sammy@tsobu.co.ke"
-        // };
 
         formData.push({
             name: 'action', value: 'process_mpesa'

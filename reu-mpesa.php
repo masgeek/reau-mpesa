@@ -109,33 +109,29 @@ function mpesa_checkout_form()
         </small>
     </div>
 
-    <div class="form-group">
-        <label for="phone">Phone Number</label>
-        <input type="text" class="form-control phone" id="phone" name="userInfo[phone]"
-               aria-describedby="phone"
-               placeholder="Enter Phone number" required="required">
-        <small id="phoneHelp" class="form-text text-muted">
-            Enter phone number you'll be paying with
-        </small>
-    </div>
-
-    <div class="form-group">
-        <label for="email">Email address</label>
-        <input type="text" class="form-control no-space" id="email" name="email"
-               aria-describedby="email"
-               placeholder="Enter email address" required="required">
-        <small id="emailHelp" class="form-text text-muted">
-            Enter your email address so that we can send you the book
-        </small>
-    </div>
-
-
-    <div class="form-group">
-        <label for="amount">Amount</label>
-        <input type="text" class="form-control" id="amount" name="amount"
-               aria-describedby="amountHelp"
-               placeholder="Enter Amount" required="required">
-        <small id="amountHelp" class="form-text text-muted">Enter amount you want to pay</small>
+    <div class="row">
+        <div class="col-md">
+            <div class="form-group">
+                <label for="phone">Phone Number</label>
+                <input type="text" class="form-control phone" id="phone" name="userInfo[phone]"
+                       aria-describedby="phone"
+                       placeholder="Enter Phone number" required="required">
+                <small id="phoneHelp" class="form-text text-muted">
+                    Enter phone number you'll be paying with
+                </small>
+            </div>
+        </div>
+        <div class="col-md">
+            <div class="form-group">
+                <label for="email">Email address</label>
+                <input type="text" class="form-control no-space" id="email" name="userInfo[email]"
+                       aria-describedby="email"
+                       placeholder="Enter email address" required="required">
+                <small id="emailHelp" class="form-text text-muted">
+                    Enter your email address so that we can send you the book
+                </small>
+            </div>
+        </div>
     </div>
 
 
@@ -243,17 +239,18 @@ function cart_form_old()
 
 function cart_form()
 {
+    $taxRate = 16;
     $productData = [
         [
 
             'itemName' => 'Book A',
             'itemPrice' => 100,
-            //'itemImage' => 'https://picsum.photos/id/237/150',
+            'itemImage' => 'https://picsum.photos/id/237/150',
         ],
         [
             'itemName' => 'Book B',
             'itemPrice' => 200,
-            //'itemImage' => 'https://picsum.photos/id/236/150',
+            'itemImage' => 'https://picsum.photos/id/236/150',
         ]
     ];
 
@@ -274,12 +271,13 @@ function cart_form()
     <?php foreach ($productData as $key => $productArr):
     $product = (object)$productArr;
     ?>
-
-    <input class="form-control hidden" readonly value="<?= $product->itemPrice ?>"
-           name="checkout[<?= $key ?>][itemPrice]"/>
     <div class="card">
         <div class="card-body">
-            <div class="row products">
+            <div class="row product">
+
+                <input class="form-control hidden" readonly value="<?= $product->itemPrice ?>"
+                       name="checkout[<?= $key ?>][itemPrice]"/>
+
                 <div class="col-lg-2">
                     <img src="<?= $product->itemImage ?>" class="img img-thumbnail"
                          alt="<?= $product->itemName ?>"/>
@@ -306,6 +304,37 @@ function cart_form()
     </div>
 <?php endforeach; ?>
     <!-- end products section -->
+    <hr/>
+    <div class="totals">
+        <div class="row totals-item">
+            <div class="col-md text-right">Sub-Total</div>
+            <div class="col-md-2 text-right" id="cart-subtotal">0.00</div>
+        </div>
+        <div class="row totals-item">
+            <div class="col-md text-right">Tax(<?= $taxRate ?>)%</div>
+            <div class="col-md-2 text-right totals-value" id="cart-tax">0.00</div>
+        </div>
+
+        <div class="row totals-item totals-item-total">
+            <div class="col-md text-right"><strong>Grand Total</strong></div>
+            <div class="col-md-2 text-right totals-value">
+                <strong id="cart-total">0.00</strong>
+            </div>
+        </div>
+    </div>
+
+    <!--    <div class="totals">-->
+    <!--        <div class="row totals-item">-->
+    <!--            <div class="col-md text-right">Sub-Total</div>-->
+    <!--            <div class="col-md-1 text-right" id="cart-subtotal">0.00</div>-->
+    <!--        </div>-->
+    <!--        <div class="row totals-item">-->
+    <!--            <div class="col-md text-right"><strong>Total</strong></div>-->
+    <!--            <div class="col-md-1 text-right totals-value">-->
+    <!--                <strong id="cart-total">0.00</strong>-->
+    <!--            </div>-->
+    <!--        </div>-->
+    <!--    </div>-->
     <?php
 }
 
@@ -322,9 +351,8 @@ function combine_forms()
         <div class="card-body">
             <form enctype="multipart/form-data" action="" method="post" name="mpesa-form" id="mpesa-form">
                 <?php
-                cart_form_old();
                 cart_form();
-                //                mpesa_checkout_form();
+                mpesa_checkout_form();
                 ?>
             </form>
         </div>
@@ -342,7 +370,7 @@ function mpesa_form_func($atts)
 
     ob_start();
 
-
+    combine_forms();
     $output = ob_get_contents();
 
     ob_end_clean();
@@ -352,7 +380,7 @@ function mpesa_form_func($atts)
 }
 
 
-add_shortcode("mpesa_form", "combine_forms");
+add_shortcode("mpesa_form", "mpesa_form_func");
 
 function process_mpesa()
 {

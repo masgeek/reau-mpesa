@@ -3,7 +3,7 @@
 jQuery(document).ready(function($) {
 
     /* Set rates + misc */
-    var taxRate = 0;
+    var taxRate = 0.14;
     var shippingRate = 0;
     var fadeTime = 300;
 
@@ -27,7 +27,7 @@ jQuery(document).ready(function($) {
             subtotal += parseFloat(jQuery(this).children('.product-line-price').text());
         });
 
-        console.log(subtotal);
+
         /* Calculate totals */
         var tax = subtotal * taxRate;
         var shipping = (subtotal > 0 ? shippingRate : 0);

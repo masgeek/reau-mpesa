@@ -1,7 +1,7 @@
 .hidden {
     display: none;
 }
-table.bodywrapcenter>tr>td {
-    width: 100%;
-    float: left;
+
+label {
+    font-weight: bold;
 }
