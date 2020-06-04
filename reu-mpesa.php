@@ -259,12 +259,12 @@ function cart_form()
     <div class="card">
         <div class="card-body">
             <div class="row">
-                <div class="col-lg-2"></div>
-                <div class="col-lg-2">Product</div>
-                <div class="col-lg-2">Item Price</div>
-                <div class="col-lg-2">Quantity</div>
-                <div class="col-lg-2 text-right">Total</div>
-                <div class="col-lg-2">&nbsp;</div>
+                <div class="col-md"></div>
+                <div class="col-md">Product</div>
+                <div class="col-md">Item Price</div>
+                <div class="col-md">Quantity</div>
+                <div class="col-md text-right">Total</div>
+                <div class="col-md">&nbsp;</div>
             </div>
         </div>
     </div>
@@ -278,23 +278,23 @@ function cart_form()
                 <input class="form-control hidden" readonly value="<?= $product->itemPrice ?>"
                        name="checkout[<?= $key ?>][itemPrice]"/>
 
-                <div class="col-lg-2">
+                <div class="col-md">
                     <img src="<?= $product->itemImage ?>" class="img img-thumbnail"
                          alt="<?= $product->itemName ?>"/>
                 </div>
-                <div class="col-lg-2"><?= $product->itemName ?></div>
+                <div class="col-md"><?= $product->itemName ?></div>
 
-                <div class="col-lg-2 product-price">
+                <div class="col-md product-price">
                     <?= $product->itemPrice ?>
                 </div>
-                <div class="col-lg-2 product-quantity">
+                <div class="col-md-4 product-quantity">
                     <input class="form-control" type="number" min="0" value="0"
                            name="checkout[<?= $key ?>][quantity]"/>
                     <small class="form-text text-muted">Quantity</small>
                 </div>
-                <div class="col-lg-2 text-right product-line-price">0.00</div>
+                <div class="col-md text-right product-line-price">0.00</div>
 
-                <div class="col-lg-2 text-right product-removal">
+                <div class="col-md text-right product-removal">
                     <button class="btn btn-sm btn-danger btn-block disabled remove-product">
                         <i class="fa fa-trash-o"></i>
                     </button>
@@ -322,19 +322,6 @@ function cart_form()
             </div>
         </div>
     </div>
-
-    <!--    <div class="totals">-->
-    <!--        <div class="row totals-item">-->
-    <!--            <div class="col-md text-right">Sub-Total</div>-->
-    <!--            <div class="col-md-1 text-right" id="cart-subtotal">0.00</div>-->
-    <!--        </div>-->
-    <!--        <div class="row totals-item">-->
-    <!--            <div class="col-md text-right"><strong>Total</strong></div>-->
-    <!--            <div class="col-md-1 text-right totals-value">-->
-    <!--                <strong id="cart-total">0.00</strong>-->
-    <!--            </div>-->
-    <!--        </div>-->
-    <!--    </div>-->
     <?php
 }
 
