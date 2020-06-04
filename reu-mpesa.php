@@ -44,66 +44,80 @@ function enqueue_scripts_func()
         true
     );
 
+    wp_register_style('bootstrap',
+        plugins_url('/vendor/npm-asset/bootstrap/dist/css/bootstrap.css', __FILE__),
+        array(),
+        '4.5.0',
+        'all'
+    );
+
     wp_register_script(
         'ajaxHandle',
         plugins_url('/js/ajax-mpesa.js', __FILE__),
         array('jquery'),
-        false,
+        '1.0.0',
         true
     );
     wp_enqueue_script('jqueryMask');
     wp_enqueue_script('ajaxHandle');
+    wp_enqueue_style('bootstrap');
 
-    wp_localize_script(
-        'ajaxHandle',
-        'mpesaAjax',
-        array('ajaxurl' => admin_url('admin-ajax.php'))
-    );
+    wp_localize_script('ajaxHandle', 'ajaxMpesaCheckout', array('ajaxurl' => admin_url('admin-ajax.php')));
 }
 
 
 function contact_form_func()
 {
     ?>
-    <form id="ajaxcontactform" action="" method="post" enctype="multipart/form-data">
-
-        <div id="ajaxcontact-text">
-
-            <div id="ajaxcontact-response" style="background-color:#E6E6FA ;color:blue;"></div>
-
-            <strong>Name </strong> <br/>
-
-            <input type="text" id="ajaxcontactname" name="ajaxcontactname"/><br/>
-
-            <br/>
-
-            <strong>Email </strong> <br/>
-
-            <input type="text" id="email" name="email" class="alpha-no-spaces"/><br/>
-
-            <input type="text" class="form-control phone" id="phone" name="phone"
-                   placeholder="Enter Phone number" required="required">
-            <br/>
-
-            <strong>Subject </strong> <br/>
-
-            <input type="text" id="ajaxcontactsubject" name="ajaxcontactsubject"/><br/>
-
-            <br/>
-
-            <strong>Contents </strong> <br/>
-
-            <textarea id="ajaxcontactcontents" name="ajaxcontactcontents" rows="10" cols="20"></textarea><br/>
-
-            <button type="button" class="button wp-generate-pw hide-if-no-js">Generate Password</button>
-
-            <button type="button" class="button wpforms-form" id="stk-button">Checkout</button>
-
-            <a onclick="sendMpesaSTKRequest();"
-               style="cursor: pointer"><b>Send Mail</b></a>
-
+    <div class="container">
+        <div class="row">
+            <div class="col-sm-12">
+                <div id="ajax-response"></div>
+            </div>
         </div>
-    </form>
+        <div class="row">
+            <div class="col-sm-12">
+                <!-- form -->
+                <form enctype="multipart/form-data" action="" method="post" name="mpesa-form" id="mpesa-form">
+                    <div class="card">
+                        <div class="card-header bg-success text-white">MOBILE MONEY PAYMENTS</div>
+                        <div class="card-body">
+
+                            <div class="form-group">
+                                <label for="phone">Phone Number</label>
+                                <input type="text" class="form-control phone" id="phone" name="phone"
+                                       aria-describedby="phone"
+                                       placeholder="Enter Phone number" required="required">
+                                <small id="phoneHelp" class="form-text text-muted">
+                                    Enter phone number you'll be paying with
+                                </small>
+                            </div>
+
+
+                            <div class="form-group">
+                                <label for="amount">Amount</label>
+                                <input type="text" class="form-control" id="amount" name="amount"
+                                       aria-describedby="amountHelp"
+                                       placeholder="Enter Amount" required="required">
+                                <small id="amountHelp" class="form-text text-muted">Enter amount you want to pay</small>
+                            </div>
+
+                        </div>
+                        <div class="card-footer">
+                            <div class="row">
+                                <div class="col-sm-4">
+                                    <button type="button" class="btn btn-outline-success btn-block" id="stk-button">
+                                        Checkout
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+                <!-- form -->
+            </div>
+        </div>
+    </div>
     <?php
 }
 
@@ -124,19 +138,19 @@ function mpesa_form_func($atts)
 
 add_shortcode("mpesa_form", "mpesa_form_func");
 
-function ajaxcontact_send_mail()
+function process_mpesa()
 {
     $results = '';
     $error = 0;
 
-    $name = $_POST['acfname'];
-    $email = $_POST['acfemail'];
-    $subject = $_POST['acfsubject'];
+    $name = $_POST['names'];
+    $email = $_POST['email'];
+    $phone = $_POST['phone'];
     $contents = $_POST['acfcontents'];
     $admin_email = get_option('admin_email');
 
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $results = $email . " :email address is not valid.";
+        $results = "Email address; {$email} is not valid.";
         $error = 1;
     } elseif (strlen($name) == 0) {
         $results = "Name is invalid.";
@@ -144,22 +158,16 @@ function ajaxcontact_send_mail()
     }
 
     if ($error == 0) {
-        $headers = 'From:' . $email . "rn";
-        if (wp_mail($admin_email, $subject, $contents, $headers)) {
-            $results = "*Thanks for you mail.";
-        } else {
-            $results = "*The mail could not be sent.";
-        }
+        //process the payment info
     }
 
     $resp = [
-        'names' => 'sammy',
         'resp' => $results
     ];
     echo json_encode($resp);
-    die();
+    exit($error);
 }
 
 //Register ajax handlers
-add_action('wp_ajax_nopriv_ajaxcontact_send_mail', 'ajaxcontact_send_mail');
-add_action('wp_ajax_ajaxcontact_send_mail', 'ajaxcontact_send_mail');
+add_action('wp_ajax_nopriv_process_mpesa', 'process_mpesa');
+add_action('wp_ajax_process_mpesa', 'process_mpesa');

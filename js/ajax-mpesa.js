@@ -1,7 +1,7 @@
 "use strict";
 
 
-jQuery(document).ready(function () {
+jQuery(document).ready(function ($) {
 
     jQuery(function (e) {
         jQuery(".phone").mask("254999999999", {placeholder: ""});
@@ -25,14 +25,24 @@ jQuery(document).ready(function () {
 
 
     function sendMpesaSTKRequest() {
-        const formData = jQuery('#mpesa-form').serialize();
+        const formData = jQuery('#mpesa-form').serializeArray();
+        // var formData = {
+        //     action: 'ajaxcontact_send_mail',
+        //     email: "sammy@tsobu.co.ke"
+        // };
 
+        formData.push({
+            name: 'action', value: 'process_mpesa'
+        });
 
+        const urlParam = jQuery.param(formData);
+
+        console.log(urlParam);
         jQuery.ajax({
             type: 'POST',
-            url: mpesaAjax.ajaxUrl,
+            url: ajaxMpesaCheckout.ajaxurl,
             dataType: "json",
-            data: formData,
+            data: urlParam,
             success: function (data, textStatus, XMLHttpRequest) {
                 processResponse(data);
             },
@@ -46,8 +56,9 @@ jQuery(document).ready(function () {
 
     function processResponse(data) {
         const id = '#ajax-response';
+
         jQuery(id).html('');
-        jQuery(id).append(data);
+        jQuery(id).append(data.resp);
         console.log(data);
     }
 });

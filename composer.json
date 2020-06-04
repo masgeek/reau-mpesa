@@ -11,6 +11,8 @@
     ],
     "require": {
         "guzzlehttp/guzzle": "^6.5",
-        "safaricom/mpesa": "^1.0"
+        "safaricom/mpesa": "^1.0",
+        "ext-json": "^7.4",
+        "giggsey/libphonenumber-for-php": "^8.12"
     }
 }
