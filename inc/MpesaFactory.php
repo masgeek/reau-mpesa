@@ -39,7 +39,8 @@ class MpesaFactory
     function __construct()
     {
         //read the environment variables
-        $dotenv = new Dotenv(dirname(__DIR__));
+        $dotenv = Dotenv::createMutable(dirname(__DIR__));
+
 //        $dotenv->required(['consumer_key', 'consumer_secret', 'application_status']);
         $dotenv->load();
 
@@ -67,7 +68,7 @@ class MpesaFactory
      * Get access token used to authorize mpesa transactions
      * @param string $endpoint
      * @return array|object|string
-     * @throws \Httpful\Exception\ConnectionErrorException
+     * @throws \GuzzleHttp\Exception\GuzzleException
      */
     protected function GenerateToken($endpoint = '/oauth/v1/generate?grant_type=client_credentials')
     {
@@ -89,7 +90,6 @@ class MpesaFactory
      * @param string $endpoint
      * @return mixed
      * @throws \GuzzleHttp\Exception\GuzzleException
-     * @throws \Httpful\Exception\ConnectionErrorException
      */
     public function LipaNaMpesaRequestQuery($body, $endpoint = '/mpesa/stkpushquery/v1/query')
     {
@@ -103,7 +103,6 @@ class MpesaFactory
      * @param string $endpoint https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest
      * @return mixed
      * @throws \GuzzleHttp\Exception\GuzzleException
-     * @throws \Httpful\Exception\ConnectionErrorException
      */
     public function LipaNaMpesaProcessRequest(array $body, $endpoint = '/mpesa/stkpush/v1/processrequest')
     {
@@ -117,7 +116,6 @@ class MpesaFactory
      * @param string $endpoint
      * @return mixed
      * @throws \GuzzleHttp\Exception\GuzzleException
-     * @throws \Httpful\Exception\ConnectionErrorException
      */
     public function customerToBusiness(array $body, $endpoint = '/mpesa/c2b/v1/simulate')
     {
@@ -130,7 +128,6 @@ class MpesaFactory
      * @param string $endpoint
      * @return mixed
      * @throws \GuzzleHttp\Exception\GuzzleException
-     * @throws \Httpful\Exception\ConnectionErrorException
      */
     public function registerC2BUrls(array $body, $endpoint = '/mpesa/c2b/v1/registerurl')
     {
@@ -153,7 +150,6 @@ class MpesaFactory
      * @param $uri
      * @return mixed
      * @throws \GuzzleHttp\Exception\GuzzleException
-     * @throws \Httpful\Exception\ConnectionErrorException
      */
     protected function processApiRequest(array $body, $uri)
     {

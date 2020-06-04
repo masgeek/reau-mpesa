@@ -8,7 +8,7 @@ jQuery(document).ready(function ($) {
         jQuery(".amount").mask("9?999999999", {placeholder: ""});
         //jQuery("#email").mask("9?99999999", {placeholder: ""});
 
-        jQuery('.alpha-no-spaces').mask("A", {
+        jQuery('.no-space').mask("A", {
             translation: {
                 "A": {pattern: /[\w@\-.+]/, recursive: true}
             }

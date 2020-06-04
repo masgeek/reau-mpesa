@@ -13,6 +13,8 @@
         "guzzlehttp/guzzle": "^6.5",
         "safaricom/mpesa": "^1.0",
         "ext-json": "^7.4",
-        "giggsey/libphonenumber-for-php": "^8.12"
+        "giggsey/libphonenumber-for-php": "^8.12",
+        "vlucas/phpdotenv": "^4.1",
+        "balambasik/input": "^1.0"
     }
 }
