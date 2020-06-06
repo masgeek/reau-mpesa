@@ -4,7 +4,7 @@
 Plugin Name: Reu Mpesa
 Plugin URI: https://tsobu.co.ke/mpesa
 Description: MPESA Payment plugin for wordpress
-Version: 1.0
+Version: 2.0.0
 Author: Sammy Barasa
 Author URI: https://tsobu.co.ke
 License: GPL2
@@ -61,6 +61,14 @@ function enqueue_scripts_func()
         '4.1.0',
         'all'
     );
+
+    wp_register_style('googlefont',
+        '//fonts.googleapis.com/css?family=Open+Sans:400,700',
+        array(),
+        null,
+        'all'
+    );
+
     wp_register_style('cartStyle',
         plugins_url('/css/cart.css', __FILE__),
         array(),
@@ -89,6 +97,7 @@ function enqueue_scripts_func()
     wp_enqueue_script('cartHandle');
     wp_enqueue_style('bootstrap');
     wp_enqueue_style('fontawesome');
+    //wp_enqueue_style('googlefont');
     wp_enqueue_style('cartStyle');
 
     wp_localize_script('ajaxHandle', 'ajaxMpesaCheckout', array('ajaxurl' => admin_url('admin-ajax.php')));
@@ -239,12 +248,20 @@ function cart_form_old()
 
 function cart_form()
 {
-    $taxRate = 16;
+    $taxRate = 14;
+
+    $description = <<<DESC
+ Let’s go on an adventure in Furaha Valley, and Join Otis the Gingercat and his wonderful friends, 
+ Lulu and Cliff on an adventure. Otis and Cliff woke up today with big smiles on their faces, excited to  Jump rope with Lulu, 
+ but they can’t find Lulu anywhere. Have you seen Lulu?
+DESC;
+
     $productData = [
         [
 
-            'itemName' => 'Book A',
-            'itemPrice' => 100,
+            'itemName' => 'Otis the Gingercat : Have you seen Lulu',
+            'itemDescription' => $description,
+            'itemPrice' => 150,
             'itemImage' => 'https://picsum.photos/id/237/150',
         ],
         [
@@ -325,7 +342,51 @@ function cart_form()
     <?php
 }
 
+function product_detail()
+{
+    ?>
+    <div class="container">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="panel panel-default  panel--styled">
+                    <div class="panel-body">
+                        <div class="col-md-12 panelTop">
+                            <div class="col-md-4">
+                                <img class="img-responsive" src="http://placehold.it/350x350" alt=""/>
+                            </div>
+                            <div class="col-md-8">
+                                <h2>Product Name</h2>
+                                <p>Lorem ipsum dolor sit amet, altera propriae iudicabit eos ne. Vel ut accusam tacimates, prima oratio ius ea. Et duo alii verterem principes, te quo putent melius fabulas, ei scripta eligendi appareat duo.</p>
+                            </div>
+                        </div>
+
+                        <div class="col-md-12 panelBottom">
+                            <div class="col-md-4 text-center">
+                                <button class="btn btn-lg btn-add-to-cart"><span class="glyphicon glyphicon-shopping-cart"></span>   Add to Cart</button>
+                            </div>
+                            <div class="col-md-4 text-left">
+                                <h5>Price <span class="itemPrice">$24.99</span></h5>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="stars">
+                                    <div id="stars" class="starrr"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php
+}
+
+
 function combine_forms()
+{
+    product_detail();
+}
+function combine_formsold()
 {
     ?>
     <div class="row">
@@ -338,7 +399,8 @@ function combine_forms()
         <div class="card-body">
             <form enctype="multipart/form-data" action="" method="post" name="mpesa-form" id="mpesa-form">
                 <?php
-                cart_form();
+//                cart_form();
+                product_detail();
                 mpesa_checkout_form();
                 ?>
             </form>
