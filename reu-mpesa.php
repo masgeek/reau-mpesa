@@ -149,105 +149,6 @@ function mpesa_checkout_form()
 
 function cart_form_old()
 {
-//    $response = wp_remote_get('http://157.245.26.55:8098/api/v3/payload');
-//    $responseBody = wp_remote_retrieve_body($response);
-//    $result = json_decode($responseBody);
-//
-//    echo '<pre>';
-//    if (is_array($result) && !is_wp_error($result)) {
-//        foreach ($result as $key => $value) {
-//            print_r($value->requestId);
-//            print_r($value->droidRequest->userInfo);
-//        }
-//    } else {
-//        var_dump($response->errors);
-//    }
-//    echo '</pre>';
-
-    $productData = [
-        [
-
-            'itemName' => 'Book A',
-            'itemPrice' => 100,
-            //'itemImage' => 'https://picsum.photos/id/237/150',
-        ],
-        [
-            'itemName' => 'Book B',
-            'itemPrice' => 200,
-            //'itemImage' => 'https://picsum.photos/id/236/150',
-        ]
-    ];
-
-    ?>
-    <div class="table-responsive">
-
-        <table class="table table-striped">
-            <thead>
-            <tr>
-                <th>&nbsp;</th>
-                <th>Product</th>
-                <th>Item Price</th>
-                <th class="text-center">Quantity</th>
-                <th class="text-right">Total</th>
-                <th>&nbsp;</th>
-            </tr>
-            </thead>
-            <tbody>
-            <!-- products section -->
-            <?php foreach ($productData as $key => $productArr):
-                $product = (object)$productArr;
-                ?>
-                <tr class="product">
-                    <td>
-                        <img src="<?= $product->itemImage ?>" class="img img-thumbnail"
-                             alt="<?= $product->itemName ?>"/>
-                    </td>
-                    <td><?= $product->itemName ?></td>
-                    <td class="product-price"><?= $product->itemPrice ?>
-                        <input class="form-control hidden" readonly value="<?= $product->itemPrice ?>"
-                               name="checkout[<?= $key ?>][itemPrice]"/>
-                    </td>
-                    <td class="product-quantity">
-                        <input class="form-control" type="number" min="0" value="0"
-                               name="checkout[<?= $key ?>][quantity]"/>
-                    </td>
-                    <td class="text-right product-line-price">0.00</td>
-                    <td class="text-right product-removal">
-                        <button class="btn btn-sm btn-danger btn-block disabled remove-product">
-                            <i class="fa fa-trash-o"></i>
-                        </button>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
-            <!-- end products section -->
-            <!-- action buttons -->
-
-            <tr class="totals">
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td>Sub-Total</td>
-                <td class="text-right" id="cart-subtotal">0.00</td>
-            </tr>
-            <tr class="totals">
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td><strong>Total</strong></td>
-                <td class="text-right totals-value">
-                    <strong id="cart-total">0.00</strong>
-                </td>
-            </tr>
-            </tbody>
-        </table>
-    </div>
-    <?php
-}
-
-function cart_form()
-{
     $taxRate = 14;
 
     $description = <<<DESC
@@ -342,40 +243,101 @@ DESC;
     <?php
 }
 
-function product_detail()
+function cart_form()
 {
-    ?>
-    <div class="container">
-        <div class="row">
-            <div class="col-md-8">
-                <div class="panel panel-default  panel--styled">
-                    <div class="panel-body">
-                        <div class="col-md-12 panelTop">
-                            <div class="col-md-4">
-                                <img class="img-responsive" src="http://placehold.it/350x350" alt=""/>
-                            </div>
-                            <div class="col-md-8">
-                                <h2>Product Name</h2>
-                                <p>Lorem ipsum dolor sit amet, altera propriae iudicabit eos ne. Vel ut accusam tacimates, prima oratio ius ea. Et duo alii verterem principes, te quo putent melius fabulas, ei scripta eligendi appareat duo.</p>
-                            </div>
-                        </div>
+    $taxRate = 14;
 
-                        <div class="col-md-12 panelBottom">
-                            <div class="col-md-4 text-center">
-                                <button class="btn btn-lg btn-add-to-cart"><span class="glyphicon glyphicon-shopping-cart"></span>   Add to Cart</button>
-                            </div>
-                            <div class="col-md-4 text-left">
-                                <h5>Price <span class="itemPrice">$24.99</span></h5>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="stars">
-                                    <div id="stars" class="starrr"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    $description = <<<DESC
+ Let’s go on an adventure in Furaha Valley, and Join Otis the Gingercat and his wonderful friends, 
+ Lulu and Cliff on an adventure. Otis and Cliff woke up today with big smiles on their faces, excited to  Jump rope with Lulu, 
+ but they can’t find Lulu anywhere. Have you seen Lulu?
+DESC;
+
+    $productData = [
+        [
+
+            'itemName' => 'Otis the Gingercat : Have you seen Lulu',
+            'itemDescription' => $description,
+            'itemPrice' => 15000,
+            'currency' => 'KSH',
+            'itemImage' => 'http://placekitten.com/200/150',
+            'metaData' => [
+                'Size : 32 pages',
+                'Genre: Children’s Picture book',
+                'Age: 4-7 yrs',
+                'Format : PDF',
+                'Download Only'
+            ]
+        ],
+    ];
+    ?>
+    <!-- products section -->
+    <?php
+    $index = 1;
+    foreach ($productData as $key => $productArr):
+        $product = (object)$productArr;
+        product_detail($index, $product);
+        $index++;
+    endforeach; ?>
+    <!-- end products section -->
+    <hr/>
+    <div class="totals">
+        <div class="row totals-item">
+            <div class="col-md text-right"><h5 class="sub-total">Sub-Total</h5></div>
+            <div class="col-md-2 text-right" id="cart-subtotal"><h5 class="sub-total">0.00</h5></div>
+        </div>
+
+        <div class="row totals-item totals-item-total">
+            <div class="col-md text-right"><h4 class="total-price">Grand Total</h4></div>
+            <div class="col-md-2 text-right totals-value">
+                <h4 class="total-price" id="cart-total">0.00</h4>
             </div>
+        </div>
+    </div>
+    <?php
+}
+
+/**
+ * @param $key
+ * @param $product
+ */
+function product_detail($key, $product)
+{
+    $metaData = $product->metaData;
+    ?>
+
+    <div class="product">
+        <div class="row">
+            <input class="form-control hiddens product-price" readonly value="<?= $product->itemPrice ?>"
+                   name="checkout[<?= $key ?>][itemPrice]" id="checkout-<?= $key ?>-itemPrice"/>
+
+            <div class="preview col-md">
+                <img class="card-img" src="<?= $product->itemImage ?>"/>
+            </div>
+            <div class="details col-md">
+                <h4 class="product-title"><?= $product->itemName ?></h4>
+                <p class="product-description"><?= $product->itemDescription ?></p>
+                <small>
+                    <ul>
+                        <?php foreach ($metaData as $key2 => $value): ?>
+                            <li><?= $value ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </small>
+
+                <h4 class="price float-right">
+                    <?= $product->currency ?>
+                    <span><?= number_format($product->itemPrice, 2) ?></span>
+                </h4>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-4 product-quantity">
+                <input class="form-control" type="number" min="0" value="0"
+                       name="checkout[<?= $key ?>][quantity]" id="checkout-<?= $key ?>-quantity"/>
+                <small class="form-text text-muted">Quantity</small>
+            </div>
+            <div class="col-md text-right product-line-price">0.00</div>
         </div>
     </div>
     <?php
@@ -383,10 +345,6 @@ function product_detail()
 
 
 function combine_forms()
-{
-    product_detail();
-}
-function combine_formsold()
 {
     ?>
     <div class="row">
@@ -399,8 +357,7 @@ function combine_formsold()
         <div class="card-body">
             <form enctype="multipart/form-data" action="" method="post" name="mpesa-form" id="mpesa-form">
                 <?php
-//                cart_form();
-                product_detail();
+                cart_form();
                 mpesa_checkout_form();
                 ?>
             </form>

@@ -13,11 +13,14 @@
     "expect": false,
     "module": false,
     "require": false,
-    "window": false
+    "window": false,
+    "$": false,
+    "jQuery": false,
+    "slideUp": false
   },
   "immed": true,
   "indent": 4,
-  "latedef": true,
+  "latedef": false,
   "maxcomplexity": 15,
   "newcap": true,
   "noarg": true,
