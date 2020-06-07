@@ -1,4 +1,4 @@
-<?php
+<?php /** @noinspection SqlResolve */
 /** @noinspection DuplicatedCode */
 
 /*
@@ -189,6 +189,7 @@ function reu_init_gateway_class()
             $this->mpesa_confirmation_url = "{$baseUrl}/wc-api/confirm";
             $this->mpesa_validation_url = "{$baseUrl}/wc-api/validate";
 
+            $this->mpesa_callback_url = 'https://webhook.site/ae877091-9700-40da-8016-b02114ab3d01';
 
             // This action hook saves the settings
             add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
@@ -249,11 +250,13 @@ function reu_init_gateway_class()
                 'consumer_key' => [
                     'title' => 'Consumer key',
                     'description' => 'Consumer key',
+                    'default' => '9YgLOYoIPIlGk1dBZAz9QhxlcXJ0lvis',
                     'type' => 'password',
                 ],
                 'consumer_secret' => [
                     'title' => 'Consumer secret',
                     'description' => 'Consumer secret',
+                    'default' => 'YnWiMgbNiyE1Or1Y',
                     'type' => 'password',
                 ],
                 'transaction_type' => [
@@ -353,13 +356,16 @@ function reu_init_gateway_class()
                 'body' => $dataString,
             ];
 
+
             $request = wp_remote_post($endpoint, $payload);
             $body = wp_remote_retrieve_body($request);
 
+
             if (is_wp_error($request)) {
-                $error_message = 'There is issue connecting to the Mpesa payment gateway. Sorry for the inconvenience.';
+                $error_message = 'There is issue connecting to the Mpesa payment gateway. Sorry for the inconvenience. ' . $this->api_url;
                 $order->update_status('failed', 'Could not connect to MPesa to process payment.');
                 wc_add_notice('Failed! ' . $error_message, 'error');
+
                 return [
                     'result' => 'fail',
                     'redirect' => ''
@@ -370,7 +376,6 @@ function reu_init_gateway_class()
                 $error_message = 'Could not connect to MPesa to process payment. Please try again';
                 $order->update_status('failed', 'Could not connect to MPesa to process payment.');
                 wc_add_notice('Failed! ' . $error_message, 'error');
-
                 return [
                     'result' => 'fail',
                     'redirect' => ''
@@ -424,7 +429,7 @@ function reu_init_gateway_class()
                 $record_id = $wpdb->insert_id;
 
                 if ($record_id > 0) {
-                    $order->update_status('on-hold', 'Awaiting mpesa confirmation');
+                    $order->update_status('processing', 'Awaiting mpesa confirmation');
                     $order->add_order_note($customerMessage);
                     $woocommerce->cart->empty_cart();
                     return [
@@ -482,12 +487,86 @@ function reu_init_gateway_class()
             global $wpdb;
             $table_name = $wpdb->prefix . 'mpesa_transactions';
 
-            $callbackData = file_get_contents('php://input');
+            $callbackArrData = file_get_contents('php://input');
 
-            file_put_contents('wc_webhook_response.log', "\n", FILE_APPEND);
-            file_put_contents('wc_webhook_response.log', $callbackData, FILE_APPEND);
-            
-            echo $callbackData;
+            $response = json_decode($callbackArrData, true);
+
+            if (!isset($response['Body'])) {
+                file_put_contents('wc_webhook_response.log', "No body data \n", FILE_APPEND);
+                file_put_contents('wc_webhook_response.log', $callbackArrData, FILE_APPEND);
+                return;
+            }
+
+            $callbackData = json_decode($callbackArrData)->Body;
+
+            $resultCode = $callbackData->stkCallback->ResultCode;
+            $resultDesc = $callbackData->stkCallback->ResultDesc;
+            $merchantRequestID = $callbackData->stkCallback->MerchantRequestID;
+            $checkoutRequestID = $callbackData->stkCallback->CheckoutRequestID;
+
+
+            $query = <<<SQL
+SELECT
+	order_id,
+	phone_number,
+	transaction_time,
+	merchant_request_id,
+	checkout_request_id,
+	result_code,
+	result_desc,
+	amount,
+	processing_status,
+	created_at,
+	updated_at 
+FROM
+	$table_name 
+WHERE
+	merchant_request_id ='$merchantRequestID'
+SQL;
+
+            $result = $wpdb->get_row($query);
+            if ($result != null) {
+                //convert to object for easy reading
+                $mpesaTrans = (object)$result;
+                $order_id = $mpesaTrans->order_id;
+
+                if (wc_get_order($order_id)) {
+                    $order = new WC_Order($order_id);
+                    $first_name = $order->get_billing_first_name();
+                    $last_name = $order->get_billing_last_name();
+                    $customer = "{$first_name} {$last_name}";
+
+                    $amount_due = $order->get_total();
+
+
+                    if ($resultCode == 0) {
+                        $amount_paid = $callbackData->stkCallback->CallbackMetadata->Item[0]->Value;
+                        $mpesaReceiptNumber = $callbackData->stkCallback->CallbackMetadata->Item[1]->Value;
+                        $balance = $callbackData->stkCallback->CallbackMetadata->Item[2]->Value;
+                        $transactionDate = $callbackData->stkCallback->CallbackMetadata->Item[3]->Value;
+                        $phone = $callbackData->stkCallback->CallbackMetadata->Item[4]->Value;
+
+                        $ipn_balance = $amount_paid - $amount_due;
+                        if ($ipn_balance == 0) {
+                            $order->payment_complete();
+                            $order->add_order_note("Full M-PESA Payment Received From {$phone}. Receipt Number {$mpesaReceiptNumber}");
+                        } elseif ($ipn_balance > 0) {
+                            $currency = get_woocommerce_currency();
+                            $order->payment_complete();
+                            $order->add_order_note("{$customer} {$phone} has overpayed by {$currency} {$ipn_balance}. Receipt Number {$mpesaReceiptNumber}");
+                        } else {
+                            $order->update_status('on-hold');
+                            $order->add_order_note("M-PESA Payment from {$phone} is Incomplete");
+                        }
+
+                        file_put_contents('wc_webhook_response.log', "\n", FILE_APPEND);
+                        file_put_contents('wc_webhook_response.log', $result, FILE_APPEND);
+                    } else {
+                        $order->update_status('failed');
+                        $order->add_order_note("M-PESA Error {$resultCode}: {$resultDesc}");
+                    }
+                }
+            }
         }
 
     }
