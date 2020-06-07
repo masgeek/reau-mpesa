@@ -5,13 +5,13 @@
 Plugin Name: Reu Att Mpesa gateway
 Plugin URI: https://tsobu.co.ke/mpesa
 Description: M-PESA Payment plugin for woocommerce
-Version: 2.0.0
-Author: Sammy Barasa
+Version: 1.0.0
+Author: Tsobu Enterprise <dev@tsobu.co.ke>
 Author URI: https://tsobu.co.ke
 License: GPL2
 
 * WC requires at least: 2.2
-* WC tested up to: 4.9.7
+* WC tested up to: 4.2.0
 */
 
 defined('ABSPATH') or die('No script kiddies please!');
@@ -150,7 +150,7 @@ function reu_init_gateway_class()
 
             // Basic settings
 
-            $this->id = 'reuatt-mpesa';
+            $this->id = 'reu_att_mpesa';
             $this->icon = plugin_dir_url(__FILE__) . 'mpesa-logo.png';
             $this->has_fields = false;
             $this->method_title = 'M-Pesa Payment';
@@ -181,21 +181,20 @@ function reu_init_gateway_class()
             $this->credentials_endpoint = $this->get_option('credentials_endpoint');
             $this->payments_endpoint = $this->get_option('payments_endpoint');
 
-            $this->mpesa_callback_url = rtrim(home_url(), '/') . ':' . $_SERVER['SERVER_PORT'] . '/?mpesa_ipn_listener=reconcile';
-            $this->mpesa_timeout_url = rtrim(home_url(), '/') . ':' . $_SERVER['SERVER_PORT'] . '/?mpesa_ipn_listener=timeout';
-            $this->mpesa_result_url = rtrim(home_url(), '/') . ':' . $_SERVER['SERVER_PORT'] . '/?mpesa_ipn_listener=reconcile';
-            $this->mpesa_confirmation_url = rtrim(home_url(), '/') . ':' . $_SERVER['SERVER_PORT'] . '/?mpesa_ipn_listener=confirm';
-            $this->mpesa_validation_url = rtrim(home_url(), '/') . ':' . $_SERVER['SERVER_PORT'] . '/?mpesa_ipn_listener=validate';
+            //https://wordpress.test/?wc-api=callback if you haven't enabled url prettifying
+            $baseUrl = rtrim(home_url(), '/');
+            $this->mpesa_callback_url = "{$baseUrl}/wc-api/callback";
+            $this->mpesa_timeout_url = "{$baseUrl}/wc-api/timeout";
+            $this->mpesa_result_url = "{$baseUrl}/wc-api/reconcile";
+            $this->mpesa_confirmation_url = "{$baseUrl}/wc-api/confirm";
+            $this->mpesa_validation_url = "{$baseUrl}/wc-api/validate";
 
 
             // This action hook saves the settings
             add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
 
-            // We need custom JavaScript to obtain a token
-            //add_action('wp_enqueue_scripts', array($this, 'payment_scripts'));
+            add_action('woocommerce_api_callback', array($this, 'mpesa_callback'));
 
-            // You can also register a webhook here
-            add_action('woocommerce_api_maliza', array($this, 'webhook'));
         }
 
         public function init_form_fields()
@@ -286,8 +285,8 @@ function reu_init_gateway_class()
 
                 'payments_endpoint' => array(
                     'title' => 'Payments Endpoint',
-                    'description' => '/mpesa/stkpush/v1/processrequest',
-                    'default' => 'Default is: mpesa/stkpush/v1/processrequest',
+                    'default' => '/mpesa/stkpush/v1/processrequest',
+                    'description' => 'Default is: mpesa/stkpush/v1/processrequest',
                     'required' => true,
                     'type' => 'text',
                     'desc_tip' => true
@@ -320,14 +319,15 @@ function reu_init_gateway_class()
             $phone = $order->get_billing_phone();
             $first_name = $order->get_billing_first_name();
             $last_name = $order->get_billing_last_name();
-            $phone = str_replace("+", "", $phone);
+
+            $phone = str_replace([' ', '<', '>', '&', '{', '}', '*', "+", '!', '@', '#', "$", '%', '^', '&', '-'], "", $phone);
             $phone = preg_replace('/^0/', '254', $phone);
             $timestamp = $this->getTimeStamp();
             $password = base64_encode($this->store_no . $this->passkey . $timestamp);
             $accountRef = "{$timestamp}{$order_id}";
 
 
-            $postData = array(
+            $postData = [
                 'BusinessShortCode' => $this->store_no,
                 'Password' => $password,
                 'Timestamp' => $timestamp,
@@ -340,7 +340,7 @@ function reu_init_gateway_class()
                 'AccountReference' => $accountRef,
                 'TransactionDesc' => 'WooCommerce Payment For ' . $order_id,
                 'Remark' => 'WooCommerce Payment via MPesa'
-            );;
+            ];
             $token = $this->authenticate();
 
             $dataString = json_encode($postData);
@@ -382,7 +382,11 @@ function reu_init_gateway_class()
 
             $responseCode = $result->ResponseCode;
 
-            if ($responseCode != 0 || $responseCode == null) {
+            file_put_contents('wc_response.log', $phone, FILE_APPEND);
+            if ($responseCode == null) {
+                file_put_contents('wc_response.log', "\n", FILE_APPEND);
+                file_put_contents('wc_response.log', $body, FILE_APPEND);
+            } else if ($responseCode != 0) {
                 $msg = $result->errorMessage;
                 $errorCode = $result->errorCode;
                 if ($msg == null) {
@@ -435,14 +439,6 @@ function reu_init_gateway_class()
             ];
         }
 
-        /*
-         * In case you need a webhook, like PayPal IPN etc
-         */
-        public function webhook()
-        {
-
-        }
-
         /**
          * Generate authentication Token
          * @return bool|null
@@ -476,6 +472,24 @@ function reu_init_gateway_class()
         {
             return current_time('YmdHis');
         }
+
+
+        /**
+         * @return false|string
+         */
+        public function mpesa_callback()
+        {
+            global $wpdb;
+            $table_name = $wpdb->prefix . 'mpesa_transactions';
+
+            $callbackData = file_get_contents('php://input');
+
+            file_put_contents('wc_webhook_response.log', "\n", FILE_APPEND);
+            file_put_contents('wc_webhook_response.log', $callbackData, FILE_APPEND);
+            
+            echo $callbackData;
+        }
+
     }
 }
 
