@@ -1,4 +1,5 @@
 <?php
+/** @noinspection DuplicatedCode */
 
 /*
 Plugin Name: Reu Att Mpesa gateway
@@ -15,22 +16,27 @@ License: GPL2
 
 defined('ABSPATH') or die('No script kiddies please!');
 
-require_once 'vendor/autoload.php';
 
 define('ACFSURL', WP_PLUGIN_URL . "/" . dirname(plugin_basename(__FILE__)));
+define('MPESA_DIR', plugin_dir_path(__FILE__));
+define('MPESA_INC_DIR', MPESA_DIR . 'includes/');
 
+
+if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_option('active_plugins')))) {
+    exit('Please install WooCommerce for this extension to work');
+}
 /*
  * This action hook registers our PHP class as a WooCommerce payment gateway
  */
 add_filter('woocommerce_payment_gateways', 'reu_add_gateway_class');
 function reu_add_gateway_class($gateways)
 {
-    $gateways[] = 'WcMpesaGateway'; // your class name is here
+    $gateways[] = 'WcMpesaGateway';
     return $gateways;
 }
 
 add_filter('query_vars', function ($query_vars) {
-    /* add additional parameters to request string to help wordpress call the actoin*/
+    /* add additional parameters to request string to help wordpress call the action */
     $query_vars [] = 'payment_action';
     return $query_vars;
 });
@@ -128,6 +134,12 @@ function reu_init_gateway_class()
         public $api_url;
         public $credentials_endpoint;
         public $payments_endpoint;
+        /* callbacks */
+        public $mpesa_callback_url;
+        public $mpesa_timeout_url;
+        public $mpesa_result_url;
+        public $mpesa_confirmation_url;
+        public $mpesa_validation_url;
 
 
         /**
@@ -150,10 +162,7 @@ function reu_init_gateway_class()
                 'products'
             );
 
-            // Method with all the options fields
             $this->init_form_fields();
-
-            // Load the settings.
             $this->init_settings();
 
             $this->title = $this->get_option('title');
@@ -172,20 +181,21 @@ function reu_init_gateway_class()
             $this->credentials_endpoint = $this->get_option('credentials_endpoint');
             $this->payments_endpoint = $this->get_option('payments_endpoint');
 
-            //Turn these settings into variables we can use
-//            foreach ($this->settings as $setting_key => $value) {
-//                $this->$setting_key = $value;
-//            }
+            $this->mpesa_callback_url = rtrim(home_url(), '/') . ':' . $_SERVER['SERVER_PORT'] . '/?mpesa_ipn_listener=reconcile';
+            $this->mpesa_timeout_url = rtrim(home_url(), '/') . ':' . $_SERVER['SERVER_PORT'] . '/?mpesa_ipn_listener=timeout';
+            $this->mpesa_result_url = rtrim(home_url(), '/') . ':' . $_SERVER['SERVER_PORT'] . '/?mpesa_ipn_listener=reconcile';
+            $this->mpesa_confirmation_url = rtrim(home_url(), '/') . ':' . $_SERVER['SERVER_PORT'] . '/?mpesa_ipn_listener=confirm';
+            $this->mpesa_validation_url = rtrim(home_url(), '/') . ':' . $_SERVER['SERVER_PORT'] . '/?mpesa_ipn_listener=validate';
 
 
             // This action hook saves the settings
             add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
 
             // We need custom JavaScript to obtain a token
-            add_action('wp_enqueue_scripts', array($this, 'payment_scripts'));
+            //add_action('wp_enqueue_scripts', array($this, 'payment_scripts'));
 
             // You can also register a webhook here
-            // add_action( 'woocommerce_api_{webhook name}', array( $this, 'webhook' ) );
+            add_action('woocommerce_api_maliza', array($this, 'webhook'));
         }
 
         public function init_form_fields()
@@ -217,17 +227,17 @@ function reu_init_gateway_class()
                     'default' => 'LITTLE REUBY STUDIOS',
                     'type' => 'text',
                 ],
-                'shortcode' => [
-                    'title' => 'Short Code',
-                    'description' => 'Short code, this is the number customers pay to',
+                'store_no' => [
+                    'title' => 'Head Office Number',
+                    'description' => 'HO/Store Number (for Till) or Paybill Number. Use "Online Shortcode" in Sandbox',
                     'default' => 174379,
                     'type' => 'number',
                     'desc_tip' => false
                 ],
-                'store_no' => [
-                    'title' => 'Store Number',
-                    'description' => 'Store number, this is used during till number payments',
-                    'default' => 600000,
+                'shortcode' => [
+                    'title' => 'Short Code',
+                    'description' => 'Your MPesa Business Till/Paybill Number. Use "Online Shortcode" in Sandbox',
+                    'default' => 174379,
                     'type' => 'number',
                     'desc_tip' => false
                 ],
@@ -299,8 +309,130 @@ function reu_init_gateway_class()
          */
         public function process_payment($order_id)
         {
+            global $wpdb;
+            global $woocommerce;
+
+            $order = new WC_Order($order_id);
+
+            $endpoint = "{$this->api_url}{$this->payments_endpoint}";
+
+            $total = $order->get_total();
+            $phone = $order->get_billing_phone();
+            $first_name = $order->get_billing_first_name();
+            $last_name = $order->get_billing_last_name();
+            $phone = str_replace("+", "", $phone);
+            $phone = preg_replace('/^0/', '254', $phone);
+            $timestamp = $this->getTimeStamp();
+            $password = base64_encode($this->store_no . $this->passkey . $timestamp);
+            $accountRef = "{$timestamp}{$order_id}";
 
 
+            $postData = array(
+                'BusinessShortCode' => $this->store_no,
+                'Password' => $password,
+                'Timestamp' => $timestamp,
+                'TransactionType' => $this->transaction_type,
+                'Amount' => round($total),
+                'PartyA' => $phone,
+                'PartyB' => $this->shortcode,
+                'PhoneNumber' => $phone,
+                'CallBackURL' => $this->mpesa_callback_url,
+                'AccountReference' => $accountRef,
+                'TransactionDesc' => 'WooCommerce Payment For ' . $order_id,
+                'Remark' => 'WooCommerce Payment via MPesa'
+            );;
+            $token = $this->authenticate();
+
+            $dataString = json_encode($postData);
+
+            $payload = [
+                'headers' => [
+                    'Authorization' => "Bearer {$token}",
+                    'Content-Type' => "application/json",
+                ],
+                'body' => $dataString,
+            ];
+
+            $request = wp_remote_post($endpoint, $payload);
+            $body = wp_remote_retrieve_body($request);
+
+            if (is_wp_error($request)) {
+                $error_message = 'There is issue connecting to the Mpesa payment gateway. Sorry for the inconvenience.';
+                $order->update_status('failed', 'Could not connect to MPesa to process payment.');
+                wc_add_notice('Failed! ' . $error_message, 'error');
+                return [
+                    'result' => 'fail',
+                    'redirect' => ''
+                ];
+            }
+
+            if (empty($body)) {
+                $error_message = 'Could not connect to MPesa to process payment. Please try again';
+                $order->update_status('failed', 'Could not connect to MPesa to process payment.');
+                wc_add_notice('Failed! ' . $error_message, 'error');
+
+                return [
+                    'result' => 'fail',
+                    'redirect' => ''
+                ];
+            }
+
+
+            $result = json_decode($body);
+
+            $responseCode = $result->ResponseCode;
+
+            if ($responseCode != 0 || $responseCode == null) {
+                $msg = $result->errorMessage;
+                $errorCode = $result->errorCode;
+                if ($msg == null) {
+                    $msg = $result->fault->faultstring;
+                    //$errorCode = $result->fault->detail->errorcode;
+                }
+                $error_message = 'MPesa Error ' . $errorCode . ': ' . $msg;
+                $order->update_status('failed', $error_message);
+                $order->add_order_note($error_message);
+                wc_add_notice('Failed! ', $error_message, 'error');
+            } else if ($responseCode == 0) {
+                $merchantRequestID = $result->MerchantRequestID;
+                $checkoutRequestID = $result->CheckoutRequestID;
+                $responseCode = $result->ResponseCode;
+                $responseDesc = $result->ResponseDescription;
+                $customerMessage = $result->CustomerMessage;
+
+                //insert to transactions table
+                $table_name = $wpdb->prefix . 'mpesa_transactions';
+                $tableData = [
+                    'order_id' => $order_id,
+                    'phone_number' => $phone,
+                    'transaction_time' => $timestamp,
+                    'merchant_request_id' => $merchantRequestID,
+                    'checkout_request_id' => $checkoutRequestID,
+                    'result_code' => $responseCode,
+                    'result_desc' => $responseDesc,
+                    'amount' => $total,
+                    'processing_status' => $order->get_status(),
+                ];
+                $wpdb->insert(
+                    $table_name,
+                    $tableData
+                );
+                $record_id = $wpdb->insert_id;
+
+                if ($record_id > 0) {
+                    $order->update_status('on-hold', 'Awaiting mpesa confirmation');
+                    $order->add_order_note($customerMessage);
+                    $woocommerce->cart->empty_cart();
+                    return [
+                        'result' => 'success',
+                        'redirect' => $this->get_return_url($order),
+                    ];
+                }
+            }
+            return [
+                'result' => 'fail',
+                'redirect' => '',
+            ];
         }
 
         /*
@@ -309,6 +441,40 @@ function reu_init_gateway_class()
         public function webhook()
         {
 
+        }
+
+        /**
+         * Generate authentication Token
+         * @return bool|null
+         */
+        public function authenticate()
+        {
+            $endpoint = "{$this->api_url}{$this->credentials_endpoint}";
+
+            $credentials = base64_encode($this->consumer_key . ':' . $this->consumer_secret);
+
+            $payload = ['headers' => ['Authorization' => 'Basic ' . $credentials]];
+
+            $request = wp_remote_get($endpoint, $payload);
+            if (is_wp_error($request)) {
+                return null;
+            }
+            $body = wp_remote_retrieve_body($request);
+            $data = json_decode($body);
+            if (empty($data)) {
+                return null;
+            } else {
+                return $data->access_token;
+            }
+        }
+
+        /**
+         * @param bool $asDate
+         * @return int|string
+         */
+        public function getTimeStamp()
+        {
+            return current_time('YmdHis');
         }
     }
 }
