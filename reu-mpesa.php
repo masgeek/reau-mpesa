@@ -27,6 +27,7 @@ define('MPESA_INC_DIR', MPESA_DIR . 'includes/');
 if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_option('active_plugins')))) {
     exit('Please install WooCommerce for this extension to work');
 }
+
 /*
  * This action hook registers our PHP class as a WooCommerce payment gateway
  */
@@ -48,18 +49,6 @@ add_action('wp', function () {
         reu_request_payment();
     }
 });
-
-function mailtrap($phpmailer)
-{
-    $phpmailer->isSMTP();
-    $phpmailer->Host = 'smtp.mailtrap.io';
-    $phpmailer->SMTPAuth = true;
-    $phpmailer->Port = 2525;
-    $phpmailer->Username = '65c719c8454a63';
-    $phpmailer->Password = '2667d8e2109936';
-}
-
-add_action('phpmailer_init', 'mailtrap');
 
 //Calls the create_mpesa_transactions_table function during plugin activation which creates table that records mpesa transactions.
 register_activation_hook(__FILE__, 'create_mpesa_transactions_table');
@@ -137,9 +126,6 @@ function reu_init_gateway_class()
 {
     class WcMpesaGateway extends WC_Payment_Gateway
     {
-        private $database;
-
-        public $testmode;
         public $merchant_name;
         public $shortcode;
         public $store_no;
@@ -172,9 +158,9 @@ function reu_init_gateway_class()
 
             // gateways can support subscriptions, refunds, saved payment methods,
             // but in this tutorial we begin with simple payments
-            $this->supports = array(
-                'products'
-            );
+//            $this->supports = array(
+//                'products'
+//            );
 
             $this->init_form_fields();
             $this->init_settings();
@@ -205,7 +191,7 @@ function reu_init_gateway_class()
 
             $this->mpesa_callback_url = 'https://webhook.site/ae877091-9700-40da-8016-b02114ab3d01';
 
-            // This action hook saves the settings
+            //This action hook saves the settings
             add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
 
             add_action('woocommerce_api_callback', array($this, 'mpesa_callback'));
@@ -291,23 +277,22 @@ function reu_init_gateway_class()
                     'required' => true,
                     'type' => 'select',
                 ],
-                'credentials_endpoint' => array(
+                'credentials_endpoint' => [
                     'readonly' => true,
                     'title' => __('Credentials Endpoint', 'woocommerce'),
                     'default' => 'oauth/v1/generate?grant_type=client_credentials',
                     'description' => 'Default is: oauth/v1/generate?grant_type=client_credentials',
                     'type' => 'text',
                     'desc_tip' => true
-                ),
-
-                'payments_endpoint' => array(
+                ],
+                'payments_endpoint' => [
                     'title' => 'Payments Endpoint',
                     'default' => '/mpesa/stkpush/v1/processrequest',
                     'description' => 'Default is: mpesa/stkpush/v1/processrequest',
                     'required' => true,
                     'type' => 'text',
                     'desc_tip' => true
-                ),
+                ],
             ];
         }
 
@@ -579,15 +564,21 @@ SQL;
 
                         $tableData = [
                             'mpesa_ref' => $mpesaReceiptNumber,
+                            'result_code' => $resultCode,
+                            'result_desc' => $resultDesc,
                             'processing_status' => $order->get_status(),
                         ];
 
                         file_put_contents('wc_webhook_response.log', "we have db jsonData\n", FILE_APPEND);
                         file_put_contents('wc_webhook_response.log', $result, FILE_APPEND);
                     } else {
+                        $errorMsg = "M-PESA Error {$resultCode}: {$resultDesc}";
                         $order->update_status('failed');
-                        $order->add_order_note("M-PESA Error {$resultCode}: {$resultDesc}");
+                        $order->add_order_note($errorMsg);
                         $tableData = [
+                            'mpesa_ref' => null,
+                            'result_code' => $resultCode,
+                            'result_desc' => $resultDesc,
                             'processing_status' => $order->get_status(),
                         ];
                     }
@@ -599,20 +590,20 @@ SQL;
         /**
          * @param array $tableData
          * @param $tableName
-         * @param $merchantrequestID
+         * @param $merchantRequestID
          */
-        function updateTransactionTable(array $tableData, $tableName, $merchantrequestID)
+        function updateTransactionTable(array $tableData, $tableName, $merchantRequestID)
         {
             global $wpdb;
 
             file_put_contents('wc_webhook_response.log', "we have db data\n", FILE_APPEND);
-            file_put_contents('wc_webhook_response.log', $merchantrequestID, FILE_APPEND);
+            file_put_contents('wc_webhook_response.log', $merchantRequestID, FILE_APPEND);
 
             $wpdb->update(
                 $tableName,
                 $tableData,
                 [
-                    'merchant_request_id' => $merchantrequestID,
+                    'merchant_request_id' => $merchantRequestID,
                 ]
             );
         }
