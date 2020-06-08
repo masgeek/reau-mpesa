@@ -215,6 +215,10 @@ function reu_init_gateway_class()
             add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
 
             add_action('woocommerce_api_callback', array($this, 'mpesa_callback'));
+            add_action('woocommerce_api_timeout', array($this, 'mpesa_callback'));
+            add_action('woocommerce_api_reconcile', array($this, 'mpesa_callback'));
+            add_action('woocommerce_api_confirm', array($this, 'mpesa_confirm'));
+            add_action('woocommerce_api_validate', array($this, 'mpesa_validate'));
 
         }
 
