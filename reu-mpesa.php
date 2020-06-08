@@ -126,6 +126,7 @@ function reu_init_gateway_class()
 {
     class WcMpesaGateway extends WC_Payment_Gateway
     {
+        private $mpesa_codes = [];
         public $merchant_name;
         public $shortcode;
         public $store_no;
@@ -191,6 +192,25 @@ function reu_init_gateway_class()
 
             $this->mpesa_callback_url = 'https://webhook.site/ae877091-9700-40da-8016-b02114ab3d01';
 
+            $this->mpesa_codes = [
+                0 => 'Success',
+                1 => 'Insufficient Funds',
+                2 => 'Less Than Minimum Transaction Value',
+                3 => 'More Than Maximum Transaction Value',
+                4 => 'Would Exceed Daily Transfer Limit',
+                5 => 'Would Exceed Minimum Balance',
+                6 => 'Unresolved Primary Party',
+                7 => 'Unresolved Receiver Party',
+                8 => 'Would Exceed Maximum Balance',
+                11 => 'Debit Account Invalid',
+                12 => 'Credit Account Invalid',
+                13 => 'Unresolved Debit Account',
+                14 => 'Unresolved Credit Account',
+                15 => 'Duplicate Detected',
+                17 => 'Internal Failure',
+                20 => 'Unresolved Initiator',
+                26 => 'Traffic blocking condition in place'
+            ];
             //This action hook saves the settings
             add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
 
