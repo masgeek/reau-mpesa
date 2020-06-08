@@ -19,9 +19,6 @@ License: GPL2
 
 defined('ABSPATH') or die('No script kiddies please!');
 
-
-require 'vendor/autoload.php';
-
 define('ACFSURL', WP_PLUGIN_URL . "/" . dirname(plugin_basename(__FILE__)));
 define('MPESA_DIR', plugin_dir_path(__FILE__));
 define('MPESA_INC_DIR', MPESA_DIR . 'includes/');
@@ -51,6 +48,18 @@ add_action('wp', function () {
         reu_request_payment();
     }
 });
+
+function mailtrap($phpmailer)
+{
+    $phpmailer->isSMTP();
+    $phpmailer->Host = 'smtp.mailtrap.io';
+    $phpmailer->SMTPAuth = true;
+    $phpmailer->Port = 2525;
+    $phpmailer->Username = '65c719c8454a63';
+    $phpmailer->Password = '2667d8e2109936';
+}
+
+add_action('phpmailer_init', 'mailtrap');
 
 //Calls the create_mpesa_transactions_table function during plugin activation which creates table that records mpesa transactions.
 register_activation_hook(__FILE__, 'create_mpesa_transactions_table');
@@ -155,15 +164,6 @@ function reu_init_gateway_class()
         public function __construct()
         {
 
-            // Basic settings
-            $this->database = new Medoo\Medoo([
-                'database_type' => 'mysql',
-                'database_name' => DB_NAME,
-                'server' => DB_HOST,
-                'username' => DB_USER,
-                'password' => DB_PASSWORD
-            ]);
-
             $this->id = 'tsobu_mpesa';
             $this->icon = plugin_dir_url(__FILE__) . 'mpesa-logo.png';
             $this->has_fields = false;
@@ -203,8 +203,6 @@ function reu_init_gateway_class()
             $this->mpesa_confirmation_url = "{$baseUrl}/wc-api/confirm";
             $this->mpesa_validation_url = "{$baseUrl}/wc-api/validate";
 
-
-            $this->process_payment(22);
             $this->mpesa_callback_url = 'https://webhook.site/ae877091-9700-40da-8016-b02114ab3d01';
 
             // This action hook saves the settings
@@ -348,29 +346,7 @@ function reu_init_gateway_class()
             $password = base64_encode($this->store_no . $this->passkey . $timestamp);
             $accountRef = "{$timestamp}{$order_id}";
 
-            $tableData = [
-                'order_id' => $order_id,
-                'phone_number' => $phone,
-                'transaction_time' => $timestamp,
-                'merchant_request_id' => 0,
-                'checkout_request_id' => 0,
-                'result_code' => 0,
-                'mpesa_ref' => 'OF676JKLOP',
-                'result_desc' => 0,
-                'amount' => $total,
-                'processing_status' => $order->get_status(),
-            ];
-            unset($tableData['merchant_request_id']);
 
-            $wpdb->update(
-                $table_name,
-                $tableData,
-                [
-                    'merchant_request_id' => 0,
-                ]
-            );
-
-            die;
             $postData = [
                 'BusinessShortCode' => $this->store_no,
                 'Password' => $password,
@@ -528,15 +504,16 @@ function reu_init_gateway_class()
             global $wpdb;
             $table_name = $wpdb->prefix . 'mpesa_transactions';
 
-            $callbackArrData = file_get_contents('php://input');
+            $response = file_get_contents('php://input');
+            $jsonData = json_decode($response);
 
-            if (!isset($response['Body'])) {
-                file_put_contents('wc_webhook_response.log', "No body data \n", FILE_APPEND);
-                file_put_contents('wc_webhook_response.log', $callbackArrData, FILE_APPEND);
+            if (!isset($jsonData->Body)) {
+                file_put_contents('wc_webhook_response.log', "No body jsonData \n", FILE_APPEND);
+                file_put_contents('wc_webhook_response.log', $response, FILE_APPEND);
                 return;
             }
 
-            $callbackData = json_decode($callbackArrData)->Body;
+            $callbackData = $jsonData->Body;
 
             $resultCode = $callbackData->stkCallback->ResultCode;
             $resultDesc = $callbackData->stkCallback->ResultDesc;
@@ -588,30 +565,56 @@ SQL;
                         $ipn_balance = $amount_paid - $amount_due;
                         if ($ipn_balance == 0) {
                             $order->payment_complete();
+                            $order->update_status('completed');
                             $order->add_order_note("Full M-PESA Payment Received From {$phone}. Receipt Number {$mpesaReceiptNumber}");
                         } elseif ($ipn_balance > 0) {
                             $currency = get_woocommerce_currency();
                             $order->payment_complete();
+                            $order->update_status('completed');
                             $order->add_order_note("{$customer} {$phone} has overpayed by {$currency} {$ipn_balance}. Receipt Number {$mpesaReceiptNumber}");
                         } else {
                             $order->update_status('on-hold');
                             $order->add_order_note("M-PESA Payment from {$phone} is Incomplete");
                         }
 
-                        file_put_contents('wc_webhook_response.log', "\n", FILE_APPEND);
+                        $tableData = [
+                            'mpesa_ref' => $mpesaReceiptNumber,
+                            'processing_status' => $order->get_status(),
+                        ];
+
+                        file_put_contents('wc_webhook_response.log', "we have db jsonData\n", FILE_APPEND);
                         file_put_contents('wc_webhook_response.log', $result, FILE_APPEND);
                     } else {
                         $order->update_status('failed');
                         $order->add_order_note("M-PESA Error {$resultCode}: {$resultDesc}");
+                        $tableData = [
+                            'processing_status' => $order->get_status(),
+                        ];
                     }
+                    $this->updateTransactionTable($tableData, $table_name, $merchantRequestID);
                 }
-                //update the table
-                $this->updateTransactionTable();
             }
         }
 
-        function updateTransactionTable()
+        /**
+         * @param array $tableData
+         * @param $tableName
+         * @param $merchantrequestID
+         */
+        function updateTransactionTable(array $tableData, $tableName, $merchantrequestID)
         {
+            global $wpdb;
+
+            file_put_contents('wc_webhook_response.log', "we have db data\n", FILE_APPEND);
+            file_put_contents('wc_webhook_response.log', $merchantrequestID, FILE_APPEND);
+
+            $wpdb->update(
+                $tableName,
+                $tableData,
+                [
+                    'merchant_request_id' => $merchantrequestID,
+                ]
+            );
         }
     }
 }
@@ -808,4 +811,3 @@ function reu_request_payment()
 
 
 }
-
