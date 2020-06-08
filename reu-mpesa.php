@@ -1,8 +1,11 @@
-<?php /** @noinspection SqlResolve */
+<?php /** @noinspection PhpComposerExtensionStubsInspection */
+
+
+/** @noinspection SqlResolve */
 /** @noinspection DuplicatedCode */
 
 /*
-Plugin Name: Reu Att Mpesa gateway
+Plugin Name: Tsobu Mpesa gateway
 Plugin URI: https://tsobu.co.ke/mpesa
 Description: M-PESA Payment plugin for woocommerce
 Version: 1.0.0
@@ -16,6 +19,8 @@ License: GPL2
 
 defined('ABSPATH') or die('No script kiddies please!');
 
+
+require 'vendor/autoload.php';
 
 define('ACFSURL', WP_PLUGIN_URL . "/" . dirname(plugin_basename(__FILE__)));
 define('MPESA_DIR', plugin_dir_path(__FILE__));
@@ -123,6 +128,8 @@ function reu_init_gateway_class()
 {
     class WcMpesaGateway extends WC_Payment_Gateway
     {
+        private $database;
+
         public $testmode;
         public $merchant_name;
         public $shortcode;
@@ -149,8 +156,15 @@ function reu_init_gateway_class()
         {
 
             // Basic settings
+            $this->database = new Medoo\Medoo([
+                'database_type' => 'mysql',
+                'database_name' => DB_NAME,
+                'server' => DB_HOST,
+                'username' => DB_USER,
+                'password' => DB_PASSWORD
+            ]);
 
-            $this->id = 'reu_att_mpesa';
+            $this->id = 'tsobu_mpesa';
             $this->icon = plugin_dir_url(__FILE__) . 'mpesa-logo.png';
             $this->has_fields = false;
             $this->method_title = 'M-Pesa Payment';
@@ -189,6 +203,8 @@ function reu_init_gateway_class()
             $this->mpesa_confirmation_url = "{$baseUrl}/wc-api/confirm";
             $this->mpesa_validation_url = "{$baseUrl}/wc-api/validate";
 
+
+            $this->process_payment(22);
             $this->mpesa_callback_url = 'https://webhook.site/ae877091-9700-40da-8016-b02114ab3d01';
 
             // This action hook saves the settings
@@ -313,8 +329,11 @@ function reu_init_gateway_class()
         {
             global $wpdb;
             global $woocommerce;
+            $table_name = $wpdb->prefix . 'mpesa_transactions';
+
 
             $order = new WC_Order($order_id);
+
 
             $endpoint = "{$this->api_url}{$this->payments_endpoint}";
 
@@ -329,7 +348,29 @@ function reu_init_gateway_class()
             $password = base64_encode($this->store_no . $this->passkey . $timestamp);
             $accountRef = "{$timestamp}{$order_id}";
 
+            $tableData = [
+                'order_id' => $order_id,
+                'phone_number' => $phone,
+                'transaction_time' => $timestamp,
+                'merchant_request_id' => 0,
+                'checkout_request_id' => 0,
+                'result_code' => 0,
+                'mpesa_ref' => 'OF676JKLOP',
+                'result_desc' => 0,
+                'amount' => $total,
+                'processing_status' => $order->get_status(),
+            ];
+            unset($tableData['merchant_request_id']);
 
+            $wpdb->update(
+                $table_name,
+                $tableData,
+                [
+                    'merchant_request_id' => 0,
+                ]
+            );
+
+            die;
             $postData = [
                 'BusinessShortCode' => $this->store_no,
                 'Password' => $password,
@@ -489,8 +530,6 @@ function reu_init_gateway_class()
 
             $callbackArrData = file_get_contents('php://input');
 
-            $response = json_decode($callbackArrData, true);
-
             if (!isset($response['Body'])) {
                 file_put_contents('wc_webhook_response.log', "No body data \n", FILE_APPEND);
                 file_put_contents('wc_webhook_response.log', $callbackArrData, FILE_APPEND);
@@ -566,11 +605,17 @@ SQL;
                         $order->add_order_note("M-PESA Error {$resultCode}: {$resultDesc}");
                     }
                 }
+                //update the table
+                $this->updateTransactionTable();
             }
         }
 
+        function updateTransactionTable()
+        {
+        }
     }
 }
+
 
 //Create Table for M-PESA Transactions
 function create_mpesa_transactions_table()
@@ -590,15 +635,17 @@ CREATE TABLE IF NOT EXISTS $table_name (
 	    id bigint NOT NULL AUTO_INCREMENT,
 		order_id varchar(150) DEFAULT '' NULL,
 		phone_number varchar(35) DEFAULT '' NULL,
-		transaction_time datetime DEFAULT '0000-00-00 00:00:00' NOT NULL,
+		transaction_time datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
 		merchant_request_id varchar(150) DEFAULT '' NULL,
 		checkout_request_id varchar(150) DEFAULT '' NULL,
 		result_code varchar(150) DEFAULT '' NULL,
 		result_desc varchar(200) DEFAULT '' NULL,
 		amount decimal(10,2) DEFAULT NULL,
+		mpesa_ref varchar(120) DEFAULT '' NULL,
+		currency varchar(4) DEFAULT 'KES' NULL,
 		processing_status varchar(20) DEFAULT '0' NULL,
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
-        updated_at datetime DEFAULT CURRENT_TIMESTAMP,
+        updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		PRIMARY KEY  (id) using BTREE
 		)$charset_collate
 SQL;
