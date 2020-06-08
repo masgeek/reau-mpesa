@@ -19,9 +19,9 @@ License: GPL2
 
 defined('ABSPATH') or die('No script kiddies please!');
 
-define('ACFSURL', WP_PLUGIN_URL . "/" . dirname(plugin_basename(__FILE__)));
-define('MPESA_DIR', plugin_dir_path(__FILE__));
-define('MPESA_INC_DIR', MPESA_DIR . 'includes/');
+//define('ACFSURL', WP_PLUGIN_URL . "/" . dirname(plugin_basename(__FILE__)));
+//define('MPESA_DIR', plugin_dir_path(__FILE__));
+//define('MPESA_INC_DIR', MPESA_DIR . 'includes/');
 
 
 if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_option('active_plugins')))) {
@@ -190,7 +190,7 @@ function reu_init_gateway_class()
             $this->mpesa_confirmation_url = "{$baseUrl}/wc-api/confirm";
             $this->mpesa_validation_url = "{$baseUrl}/wc-api/validate";
 
-            //$this->mpesa_callback_url = 'https://webhook.site/ae877091-9700-40da-8016-b02114ab3d01';
+            $this->mpesa_callback_url = 'https://webhook.site/ae877091-9700-40da-8016-b02114ab3d01';
 
             $this->mpesa_codes = [
                 0 => 'Success',
@@ -220,6 +220,7 @@ function reu_init_gateway_class()
             add_action('woocommerce_api_confirm', array($this, 'mpesa_confirm'));
             add_action('woocommerce_api_validate', array($this, 'mpesa_validate'));
 
+            add_action('woocommerce_receipt_tsobu_mpesa', array($this, 'receipt_page'));
         }
 
         public function init_form_fields()
@@ -317,15 +318,92 @@ function reu_init_gateway_class()
                     'type' => 'text',
                     'desc_tip' => true
                 ],
+                'enable_c2b' => array(
+                    'title' => 'Manual Payments',
+                    'label' => 'Enable C2B API(Offline Payments)',
+                    'type' => 'checkbox',
+                    'description' => '<small>' . (($this->get_option('idtype') == 4) ? 'This requires C2B Validation, which is an optional feature that needs to be activated on M-Pesa. <br>Request for activation by sending an email to <a href="mailto:apisupport@safaricom.co.ke">apisupport@safaricom.co.ke</a>, or through a chat on the <a href="https://developer.safaricom.co.ke/">developer portal.</a><br>' : '') . '<a class="button button-secondary" href="' . home_url('lipwa/register/') . '">Once enabled, click here to register confirmation & validation URLs</a><p>Kindly note that if this is disabled, the user can still resend an STK push if the first one fails.</p></small>',
+                    'default' => 'no',
+                ),
             ];
         }
 
 
-        /*
-          * Fields validation, more in Step 5
-         */
         public function validate_fields()
         {
+            //validate  phone
+            $mpesa_number = filter_input(INPUT_POST, 'billing_phone', FILTER_VALIDATE_INT);
+
+            if (!isset($mpesa_number)) {
+                wc_add_notice(__('Phone number is required!', 'wc-mpesa-payment-gateway'), 'error');
+                return false;
+            }
+            return true;
+        }
+
+        /**
+         * Receipt Page
+         **/
+
+        public function receipt_page($order_id)
+        {
+            echo $this->woompesa_generate_iframe($order_id);
+        }
+
+        public function woompesa_generate_iframe($order_id)
+        {
+            global $woocommerce;
+            $order = new WC_Order ($order_id);
+
+            $tel = $order->billing_phone;
+            //cleanup the phone number and remove unecessary symbols
+            $tel = str_replace("-", "", $tel);
+            $tel = str_replace(array(' ', '<', '>', '&', '{', '}', '*', "+", '!', '@', '#', "$", '%', '^', '&'), "", $tel);
+            $_SESSION['tel'] = "254" . substr($tel, -9);
+
+            /**
+             * Make the payment here by clicking on pay button and confirm by clicking on complete order button
+             */
+
+            if ($_GET['transactionType'] == 'checkout') {
+
+
+                echo "<h4>Payment Instructions:</h4>";
+
+                echo "
+
+		  1. Click on the <b>Pay</b> button in order to initiate the M-PESA payment.<br/>
+
+		  2. Check your mobile phone for a prompt asking to enter M-PESA pin.<br/>
+
+    	  3. Enter your <b>M-PESA PIN</b> and the amount specified on the 
+
+    	  	notification will be deducted from your M-PESA account when you press send.<br/>
+
+    	  4. When you enter the pin and click on send, you will receive an M-PESA payment confirmation message on your mobile phone.<br/>     	
+
+    	  5. After receiving the M-PESA payment confirmation message please click on the <b>Complete Order</b> button below to complete the order and confirm the payment made.<br/>";
+
+                echo "<br/>"; ?>
+
+
+                <input type="hidden" value="" id="txid"/>
+
+                <?php echo $_SESSION['response_status']; ?>
+
+                <div id="commonname"></div>
+
+                <button onClick="pay()" id="pay_btn">Pay</button>
+
+                <button onClick="x()" id="complete_btn">Complete Order</button>
+
+                <?php
+
+                echo "<br/>";
+
+
+            }
+
 
         }
 
@@ -348,14 +426,18 @@ function reu_init_gateway_class()
             $phone = $order->get_billing_phone();
             $first_name = $order->get_billing_first_name();
             $last_name = $order->get_billing_last_name();
-
-            $phone = str_replace([' ', '<', '>', '&', '{', '}', '*', "+", '!', '@', '#', "$", '%', '^', '&', '-'], "", $phone);
-            $phone = preg_replace('/^0/', '254', $phone);
             $timestamp = $this->getTimeStamp();
             $password = base64_encode($this->store_no . $this->passkey . $timestamp);
             $accountRef = "{$timestamp}{$order_id}";
 
 
+            if (!$phone || !preg_match('/^254[0-9]{9}$/', $phone)) {
+                wc_add_notice('Phone number is incorrect! It should start with 2547xxxxxxxx', 'error');
+                return [
+                    'result' => 'fail',
+                    'redirect' => ''
+                ];
+            }
             $postData = [
                 'BusinessShortCode' => $this->store_no,
                 'Password' => $password,
@@ -439,6 +521,8 @@ function reu_init_gateway_class()
                 $table_name = $wpdb->prefix . 'mpesa_transactions';
                 $tableData = [
                     'order_id' => $order_id,
+                    'first_name' => strtoupper($first_name),
+                    'last_name' => strtoupper($last_name),
                     'phone_number' => $phone,
                     'transaction_time' => $timestamp,
                     'merchant_request_id' => $merchantRequestID,
@@ -455,12 +539,22 @@ function reu_init_gateway_class()
                 $record_id = $wpdb->insert_id;
 
                 if ($record_id > 0) {
-                    $order->update_status('processing', 'Awaiting mpesa confirmation');
+                    $order->update_status('pending', 'Awaiting mpesa confirmation');
                     $order->add_order_note($customerMessage);
-                    $woocommerce->cart->empty_cart();
+                    //$woocommerce->cart->empty_cart();
+
+                    $checkout_url = $order->get_checkout_payment_url(true);
+                    $checkout_edited_url = $checkout_url . "&transactionType=checkout";
+
+                    //redirect to order summary do not full fill the order yet
                     return [
                         'result' => 'success',
                         'redirect' => $this->get_return_url($order),
+                    ];
+                    return [
+                        'result' => 'success',
+                        'redirect' => add_query_arg('order', $order_id,
+                            add_query_arg('key', $order->order_key, $checkout_edited_url))
                     ];
                 }
             }
@@ -592,6 +686,9 @@ SQL;
                             'result_desc' => $resultDesc,
                             'processing_status' => $order->get_status(),
                         ];
+                        $conditionData = [
+                            'merchant_request_id' => $merchantRequestID,
+                        ];
 
                         file_put_contents('wc_webhook_response.log', "we have db jsonData\n", FILE_APPEND);
                         file_put_contents('wc_webhook_response.log', $result, FILE_APPEND);
@@ -605,30 +702,107 @@ SQL;
                             'result_desc' => $resultDesc,
                             'processing_status' => $order->get_status(),
                         ];
+
+                        $conditionData = [
+                            'merchant_request_id' => $merchantRequestID,
+                        ];
                     }
-                    $this->updateTransactionTable($tableData, $table_name, $merchantRequestID);
+                    $this->updateTransactionTable($tableData, $table_name, $conditionData);
                 }
             }
         }
 
         /**
+         * Allow transaction to proceed
+         * @todo Get WC transaction ID
+         */
+        public function mpesa_proceed($transID = 0)
+        {
+            return array(
+                'ResponseCode' => 0,
+                'ResponseDesc' => 'Success',
+                'ThirdPartyTransID' => $transID
+            );
+        }
+
+        public function mpesa_confirm($transID = 0)
+        {
+            $response = file_get_contents('php://input');
+            $callbackData = json_decode($response);
+
+            if (!isset($callbackData->TransID)) {
+                $resp = [
+                    "ResultCode" => 1,
+                    "ResultDesc" => "Failed",
+                    "ThirdPartyTransID" => $transID
+                ];
+            } else {
+
+                $amount_paid = $callbackData->TransAmount;
+                $mpesaReceiptNumber = $callbackData->TransID;
+                $balance = $callbackData->OrgAccountBalance;
+                $transactionDate = $callbackData->TransTime;
+                $phone = $callbackData->MSISDN;
+                $firstName = $callbackData->FirstName;
+                $middleName = $callbackData->MiddleName;
+                $lastName = $callbackData->LastName;
+
+                $tableData = [
+                    'mpesa_ref' => $mpesaReceiptNumber,
+                    'result_code' => $transID,
+                    'phone_number' => $phone,
+                    'result_desc' => "Mpesa C2B",
+                    'processing_status' => 0,
+                ];
+
+                $args = array(
+                    'limit' => -1,
+                    //'return' => 'ids',
+                    'date_completed' => '2018-10-01...2020-01-10',
+                    'status' => 'pending'
+                );
+                $orders = wc_get_orders($args);
+                foreach ($orders as $order) {
+                    foreach ($order->get_items() as $item_id => $item_values) {
+                        $order_id = $item_values['order_id'];
+                        $order = new WC_Order($order_id);
+                        $orderTotal = (float)$order->get_total();
+                        $billingPhone = $order->get_billing_phone();
+                        //check if billing phone matches the mpesa payment phone
+                        if($billingPhone==$phone){
+                            //stop loop and proceed with the processsing
+                            //break;
+                        }
+
+                        wp_send_json($orderTotal==$amount_paid);
+                    }
+                }
+
+                wp_send_json($orders);
+                $resp = [
+                    "ResultCode" => 0,
+                    "ResultDesc" => "Completed",
+                    "ThirdPartyTransID" => $transID
+                ];
+            }
+
+            wp_send_json($resp);
+        }
+
+        /**
          * @param array $tableData
          * @param $tableName
-         * @param $merchantRequestID
+         * @param $conditionData
+         * @return bool|false|int
          */
-        function updateTransactionTable(array $tableData, $tableName, $merchantRequestID)
+        public function updateTransactionTable(array $tableData, $tableName, array $conditionData)
         {
             global $wpdb;
 
-            file_put_contents('wc_webhook_response.log', "we have db data\n", FILE_APPEND);
-            file_put_contents('wc_webhook_response.log', $merchantRequestID, FILE_APPEND);
-
-            $wpdb->update(
+            return $wpdb->update(
                 $tableName,
                 $tableData,
-                [
-                    'merchant_request_id' => $merchantRequestID,
-                ]
+                $conditionData
             );
         }
     }
@@ -651,21 +825,25 @@ function create_mpesa_transactions_table()
     $sql = <<<SQL
 CREATE TABLE IF NOT EXISTS $table_name (
 	    id bigint NOT NULL AUTO_INCREMENT,
-		order_id varchar(150) DEFAULT '' NULL,
-		phone_number varchar(35) DEFAULT '' NULL,
+		order_id varchar(150) DEFAULT NULL,
+		phone_number varchar(35) DEFAULT NULL,
+        first_name varchar(150) NOT NULL,
+        middle_name varchar(150) NOT NULL,
+        last_name varchar(150) NULL,
 		transaction_time datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
-		merchant_request_id varchar(150) DEFAULT '' NULL,
-		checkout_request_id varchar(150) DEFAULT '' NULL,
-		result_code varchar(150) DEFAULT '' NULL,
-		result_desc varchar(200) DEFAULT '' NULL,
+		merchant_request_id varchar(150) DEFAULT NULL,
+		checkout_request_id varchar(150) DEFAULT NULL,
+		result_code varchar(150) DEFAULT NULL,
+		result_desc varchar(200) DEFAULT NULL,
 		amount decimal(10,2) DEFAULT NULL,
-		mpesa_ref varchar(120) DEFAULT '' NULL,
+		mpesa_ref varchar(120) DEFAULT NULL,
 		currency varchar(4) DEFAULT 'KES' NULL,
 		processing_status varchar(20) DEFAULT '0' NULL,
+		transaction_type varchar(20) DEFAULT 'STK' NULL,
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		PRIMARY KEY  (id) using BTREE
-		)$charset_collate
+		)ENGINE=InnoDB $charset_collate
 SQL;
 
 
