@@ -770,7 +770,7 @@ SQL;
                         $billingPhone = $order->get_billing_phone();
                         //check if billing phone matches the mpesa payment phone
                         if($billingPhone==$phone){
-                            //stop loop and proceed with the processsing
+                            //stop loop and proceed with the processing
                             //break;
                         }
 
