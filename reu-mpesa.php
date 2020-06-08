@@ -190,7 +190,7 @@ function reu_init_gateway_class()
             $this->mpesa_confirmation_url = "{$baseUrl}/wc-api/confirm";
             $this->mpesa_validation_url = "{$baseUrl}/wc-api/validate";
 
-            $this->mpesa_callback_url = 'https://webhook.site/ae877091-9700-40da-8016-b02114ab3d01';
+            //$this->mpesa_callback_url = 'https://webhook.site/ae877091-9700-40da-8016-b02114ab3d01';
 
             $this->mpesa_codes = [
                 0 => 'Success',
@@ -247,6 +247,15 @@ function reu_init_gateway_class()
                     'default' => 'LITTLE REUBY STUDIOS',
                     'type' => 'text',
                 ],
+                'transaction_type' => [
+                    'title' => 'Transaction type',
+                    'options' => [
+                        'CustomerPayBillOnline' => 'CustomerPayBillOnline',
+                        'CustomerBuyGoodsOnline' => 'CustomerBuyGoodsOnline'
+                    ],
+                    'required' => true,
+                    'type' => 'select',
+                ],
                 'store_no' => [
                     'title' => 'Head Office Number',
                     'description' => 'HO/Store Number (for Till) or Paybill Number. Use "Online Shortcode" in Sandbox',
@@ -261,12 +270,6 @@ function reu_init_gateway_class()
                     'type' => 'number',
                     'desc_tip' => false
                 ],
-                'passkey' => [
-                    'title' => 'API pass key',
-                    'description' => 'Pass key for authentication',
-                    'default' => 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919',
-                    'type' => 'textarea',
-                ],
                 'consumer_key' => [
                     'title' => 'Consumer key',
                     'description' => 'Consumer key',
@@ -279,14 +282,11 @@ function reu_init_gateway_class()
                     'default' => 'YnWiMgbNiyE1Or1Y',
                     'type' => 'password',
                 ],
-                'transaction_type' => [
-                    'title' => 'Transaction type',
-                    'options' => [
-                        'CustomerPayBillOnline' => 'CustomerPayBillOnline',
-                        'CustomerBuyGoodsOnline' => 'CustomerBuyGoodsOnline'
-                    ],
-                    'required' => true,
-                    'type' => 'select',
+                'passkey' => [
+                    'title' => 'API pass key',
+                    'description' => 'Pass key for authentication',
+                    'default' => 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919',
+                    'type' => 'textarea',
                 ],
                 'api_url' => [
                     'title' => 'API Endpoint',
