@@ -1,2 +1,8 @@
 .idea/workspace.xml
-vendor
+vendor/
+node_modules
+package-lock.json
+yarn.lock
+.env
+.phploy
+.log
