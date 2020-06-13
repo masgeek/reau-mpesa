@@ -715,7 +715,7 @@ SQL;
                         $order->update_status('failed');
                         $order->add_order_note($errorMsg);
                         $tableData = [
-                            'mpesa_ref' => null,
+                            'mpesa_ref' => $order_id,
                             'result_code' => $resultCode,
                             'result_desc' => $resultDesc,
                             'processing_status' => $order->get_status(),
@@ -893,7 +893,6 @@ SQL;
 
         /**
          * @param array $tableData
-         * @param $tableName
          * @return bool|false|int
          */
         public function insertToTransactionTable(array $tableData)
@@ -901,8 +900,6 @@ SQL;
             global $wpdb;
 
             $tableName = $wpdb->prefix . 'mpesa_transactions';
-
-
             return $wpdb->insert(
                 $tableName,
                 $tableData
@@ -929,7 +926,6 @@ function reu_request_payment()
     $mode = $resp['mode'];
 
     if ($mode == "stk") {
-        //query using order id
         $query = <<<SQL
 SELECT
 	order_id,
@@ -974,6 +970,8 @@ AND
     mpesa_ref ='$mpesaRef'
 AND
     amount = '$amountPaid'
+AND
+    processing_status =  '0'
 SQL;
     }
 
