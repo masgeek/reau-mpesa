@@ -1,0 +1,56 @@
+.stk-instructions {
+}
+
+.manual-instructions {
+}
+
+.form-input {
+    width: 100%;
+}
+
+.no-prompt {
+    margin-top: 15px;
+    color: #a70d0d;
+}
+
+.stk-prompt {
+    margin-top: 15px;
+    color: #a70d0d;
+}
+
+
+.no-prompt:hover, .stk-prompt:hover {
+    cursor: pointer;
+    color: #0d7ba7;
+}
+
+.hidden {
+    display: none;
+}
+
+.stk-instructions strong, .manual-instructions strong {
+    color: #a70d0d;
+}
+
+.manual-instructions li, .stk-instructions li {
+    margin: -10px;
+}
+
+
+.final_success {
+    color: green !important;
+    font-size: 20px !important;
+    padding: 5px 10px;
+}
+
+.waiting_success {
+    color: orange !important;
+    font-size: 20px !important;
+    padding: 5px 10px;
+}
+
+.error {
+    color: red !important;
+    font-size: 20px !important;
+    padding: 5px 10px;
+}

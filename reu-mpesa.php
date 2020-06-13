@@ -38,6 +38,11 @@ function reu_add_gateway_class($gateways)
     return $gateways;
 }
 
+add_action('init', function () {
+    /** Add a custom path and set a custom query argument. */
+    add_rewrite_rule('^/payment/?([^/]*)/?', 'index.php?payment_action=1', 'top');
+});
+
 add_filter('query_vars', function ($query_vars) {
     /* add additional parameters to request string to help wordpress call the action */
     $query_vars [] = 'payment_action';
@@ -50,40 +55,17 @@ add_action('wp', function () {
     }
 });
 
+//Register ajax handlers
+
+add_action('wp_ajax_nopriv_process_mpesa', 'reu_request_payment');
+add_action('wp_ajax_process_mpesa', 'reu_request_payment');
+
 //Calls the create_mpesa_transactions_table function during plugin activation which creates table that records mpesa transactions.
 register_activation_hook(__FILE__, 'create_mpesa_transactions_table');
 
-//add_action('wp_enqueue_scripts', "enqueue_scripts_func");
+add_action('wp_enqueue_scripts', "reu_enqueue_scripts_func");
 function reu_enqueue_scripts_func()
 {
-    wp_register_script('jqueryMask',
-        plugins_url('/vendor/npm-asset/jquery-mask-plugin/dist/jquery.mask.min.js', __FILE__),
-        array('jquery'),
-        '1.14.16',
-        true
-    );
-
-    wp_register_style('bootstrap',
-        plugins_url('/vendor/npm-asset/bootstrap/dist/css/bootstrap.min.css', __FILE__),
-        array(),
-        '4.5.0',
-        'all'
-    );
-
-    wp_register_style('fontawesome',
-        '//maxcdn.bootstrapcdn.com/font-awesome/4.1.0/css/font-awesome.min.css',
-        array(),
-        '4.1.0',
-        'all'
-    );
-
-    wp_register_style('googlefont',
-        '//fonts.googleapis.com/css?family=Open+Sans:400,700',
-        array(),
-        null,
-        'all'
-    );
-
     wp_register_style('cartStyle',
         plugins_url('/css/cart.css', __FILE__),
         array(),
@@ -152,7 +134,7 @@ function reu_init_gateway_class()
         {
 
             $this->id = 'tsobu_mpesa';
-            $this->icon = plugin_dir_url(__FILE__) . 'mpesa-logo.png';
+            $this->icon = plugin_dir_url(__FILE__) . 'mpesa.png';
             $this->has_fields = false;
             $this->method_title = 'M-Pesa Payment';
             $this->method_description = __('Enable customers to make payments via mpesa');
@@ -355,11 +337,25 @@ function reu_init_gateway_class()
             global $woocommerce;
             $order = new WC_Order ($order_id);
 
-            $tel = $order->billing_phone;
-            //cleanup the phone number and remove unecessary symbols
-            $tel = str_replace("-", "", $tel);
-            $tel = str_replace(array(' ', '<', '>', '&', '{', '}', '*', "+", '!', '@', '#', "$", '%', '^', '&'), "", $tel);
-            $_SESSION['tel'] = "254" . substr($tel, -9);
+            $amnt = $order->get_total();
+
+            $tel = $order->get_billing_phone();
+
+
+            $manualInstructions = "<div class='manual-instructions hidden'>";
+            $manualInstructions .= <<<MANUAL
+<ol>
+<li>Go to the M-PESA menu on your phone</li>
+<li>Select BuyGoods Option : Enter Till Number: <strong>$this->shortcode</strong></li>
+<li>Enter the EXACT amount (KSh. <strong>$amnt</strong> )</li>
+<li>Enter your PIN and then send the money</li>
+<li>Complete your transaction on your phone</li>
+<li>You will receive a transaction confirmation SMS from MPESA</li>
+<li>Enter the M-PESA Confirmation reference</li>
+<li>Then click on the <strong>Confirm Payment</strong> button below</li>
+</ol>
+MANUAL;
+            $manualInstructions .= "</div>";
 
             /**
              * Make the payment here by clicking on pay button and confirm by clicking on complete order button
@@ -367,41 +363,50 @@ function reu_init_gateway_class()
 
             if ($_GET['transactionType'] == 'checkout') {
 
+                $redirect = $_GET['rdr'];
+                $instructions = "<h4>Payment Instructions:</h4>";
 
-                echo "<h4>Payment Instructions:</h4>";
+                $instructions .= "<div class='stk-instructions'>";
+                $instructions .= <<<INSTR
+<ol>
+        <li>Click on the <strong>Pay</strong> button in order to initiate the M-PESA payment.</li>
+        <li>Check your mobile phone for a prompt asking to enter M-PESA pin.</li>
+        <li>Enter your <strong>M-PESA PIN</strong> and the amount specified <strong>$amnt</strong> on the 
+        notification will be deducted from your M-PESA account when you press send.</li>
+        <li>When you enter the pin and click on send, you will receive an M-PESA payment confirmation message on your mobile phone.</li>    	
+        <li>After receiving the M-PESA payment confirmation message please click on the <strong>Confirm Payment</strong> button below to complete the order and confirm the payment made.</li>
+</ol>
+INSTR;
+                $instructions .= "</div>";
+                $help = "<h5 class='no-prompt'>I did not get a prompt on my phone. Take me to the previous MPESA payment method</h5>";
+                $help .= "<h5 class='stk-prompt hidden'>Use LIPA Online</h5>";
 
-                echo "
-
-		  1. Click on the <b>Pay</b> button in order to initiate the M-PESA payment.<br/>
-
-		  2. Check your mobile phone for a prompt asking to enter M-PESA pin.<br/>
-
-    	  3. Enter your <b>M-PESA PIN</b> and the amount specified on the 
-
-    	  	notification will be deducted from your M-PESA account when you press send.<br/>
-
-    	  4. When you enter the pin and click on send, you will receive an M-PESA payment confirmation message on your mobile phone.<br/>     	
-
-    	  5. After receiving the M-PESA payment confirmation message please click on the <b>Complete Order</b> button below to complete the order and confirm the payment made.<br/>";
-
-                echo "<br/>"; ?>
-
-
-                <input type="hidden" value="" id="txid"/>
-
-                <?php echo $_SESSION['response_status']; ?>
+                ?>
 
                 <div id="commonname"></div>
+                <?= $instructions ?>
+                <?= $manualInstructions ?>
+                <?= $help ?>
+                <input type="hidden" value="<?= $redirect ?>" id="redirect_url"/>
+                <input type="hidden" value="<?= $order_id ?>" id="order_id"/>
+                <input type="hidden" value="stk" id="payment_mode" readonly/>
+                <input type="hidden" value="<?= $amnt ?>" id="amount" readonly/>
 
-                <button onClick="pay()" id="pay_btn">Pay</button>
-
-                <button onClick="x()" id="complete_btn">Complete Order</button>
+                <div class="manual-instructions hidden">
+                    <label for="phone_number">Payment number</label>
+                    <br/>
+                    <input type="text" value="<?= $tel ?>" id="phone_number" readonly
+                           class="form-input"/>
+                    <br/>
+                    <br/>
+                    <label for="mpesa_ref">M-PESA reference</label>
+                    <br/>
+                    <input type="text" value="" id="mpesa_ref" placeholder="Mpesa Reference"
+                           class="form-input"/>
+                </div>
+                <button id="pay_btn" style="width: 100%;margin-top: 15px;">Confirm Payment</button>
 
                 <?php
-
-                echo "<br/>";
-
-
             }
 
 
@@ -497,8 +502,13 @@ function reu_init_gateway_class()
 
             file_put_contents('wc_response.log', $phone, FILE_APPEND);
             if ($responseCode == null) {
-                file_put_contents('wc_response.log', "\n", FILE_APPEND);
-                file_put_contents('wc_response.log', $body, FILE_APPEND);
+                $error_message = 'Could not process your MPesa transaction, please try again';
+                $order->update_status('failed', 'Could not process your MPesa transaction, please try again.');
+                wc_add_notice('Failed! ' . $error_message, 'error');
+                return [
+                    'result' => 'fail',
+                    'redirect' => ''
+                ];
             } else if ($responseCode != 0) {
                 $msg = $result->errorMessage;
                 $errorCode = $result->errorCode;
@@ -518,13 +528,13 @@ function reu_init_gateway_class()
                 $customerMessage = $result->CustomerMessage;
 
                 //insert to transactions table
-                $table_name = $wpdb->prefix . 'mpesa_transactions';
                 $tableData = [
                     'order_id' => $order_id,
                     'first_name' => strtoupper($first_name),
                     'last_name' => strtoupper($last_name),
                     'phone_number' => $phone,
                     'transaction_time' => $timestamp,
+                    'mpesa_ref' => $timestamp,
                     'merchant_request_id' => $merchantRequestID,
                     'checkout_request_id' => $checkoutRequestID,
                     'result_code' => $responseCode,
@@ -541,20 +551,22 @@ function reu_init_gateway_class()
                 if ($record_id > 0) {
                     $order->update_status('pending', 'Awaiting mpesa confirmation');
                     $order->add_order_note($customerMessage);
-                    //$woocommerce->cart->empty_cart();
 
+                    $returnUrl = $this->get_return_url($order); //url to redericet after successfull checkout
                     $checkout_url = $order->get_checkout_payment_url(true);
-                    $checkout_edited_url = $checkout_url . "&transactionType=checkout";
+                    $checkout_edited_url = $checkout_url . "&transactionType=checkout&rdr={$returnUrl}";
+
 
                     //redirect to order summary do not full fill the order yet
-                    return [
-                        'result' => 'success',
-                        'redirect' => $this->get_return_url($order),
-                    ];
+//                    return [
+//                        'result' => 'success',
+//                        'redirect' => $this->get_return_url($order),
+//                    ];
                     return [
                         'result' => 'success',
                         'redirect' => add_query_arg('order', $order_id,
-                            add_query_arg('key', $order->order_key, $checkout_edited_url))
+                            add_query_arg('key', $order->order_key, $checkout_edited_url)
+                        )
                     ];
                 }
             }
@@ -613,7 +625,7 @@ function reu_init_gateway_class()
             if (!isset($jsonData->Body)) {
                 file_put_contents('wc_webhook_response.log', "No body jsonData \n", FILE_APPEND);
                 file_put_contents('wc_webhook_response.log', $response, FILE_APPEND);
-                return;
+                wp_send_json($jsonData);
             }
 
             $callbackData = $jsonData->Body;
@@ -623,6 +635,10 @@ function reu_init_gateway_class()
             $merchantRequestID = $callbackData->stkCallback->MerchantRequestID;
             $checkoutRequestID = $callbackData->stkCallback->CheckoutRequestID;
 
+            $resp = [
+                'ResponseCode' => $resultCode,
+                'ResponseDesc' => 'Failed to process transaction results',
+            ];
 
             $query = <<<SQL
 SELECT
@@ -690,8 +706,10 @@ SQL;
                             'merchant_request_id' => $merchantRequestID,
                         ];
 
-                        file_put_contents('wc_webhook_response.log', "we have db jsonData\n", FILE_APPEND);
-                        file_put_contents('wc_webhook_response.log', $result, FILE_APPEND);
+                        $resp = [
+                            'ResponseCode' => $resultCode,
+                            'ResponseDesc' => "Payment processed successfully",
+                        ];
                     } else {
                         $errorMsg = "M-PESA Error {$resultCode}: {$resultDesc}";
                         $order->update_status('failed');
@@ -706,10 +724,17 @@ SQL;
                         $conditionData = [
                             'merchant_request_id' => $merchantRequestID,
                         ];
+
+                        $resp = [
+                            'ResponseCode' => $resultCode,
+                            'ResponseDesc' => $errorMsg,
+                        ];
                     }
-                    $this->updateTransactionTable($tableData, $table_name, $conditionData);
+                    $this->updateTransactionTable($tableData, $conditionData);
                 }
             }
+
+            wp_send_json($resp);
         }
 
         /**
@@ -718,11 +743,86 @@ SQL;
          */
         public function mpesa_proceed($transID = 0)
         {
-            return array(
+            return [
                 'ResponseCode' => 0,
                 'ResponseDesc' => 'Success',
                 'ThirdPartyTransID' => $transID
-            );
+            ];
+        }
+
+        /**
+         * @param int $transID
+         * @deprecated
+         *
+         */
+        public function mpesa_confirm_old($transID = 0)
+        {
+            $response = file_get_contents('php://input');
+            $callbackData = json_decode($response);
+
+            if (!isset($callbackData->TransID)) {
+                $resp = [
+                    "ResultCode" => 1,
+                    "ResultDesc" => "Failed",
+                    "ThirdPartyTransID" => $transID
+                ];
+            } else {
+
+                $amount_paid = $callbackData->TransAmount;
+                $mpesaReceiptNumber = $callbackData->TransID;
+                $balance = $callbackData->OrgAccountBalance;
+                $transactionDate = $callbackData->TransTime;
+                $phone = $callbackData->MSISDN;
+                $firstName = $callbackData->FirstName;
+                $middleName = $callbackData->MiddleName;
+                $lastName = $callbackData->LastName;
+
+                $tableData = [
+                    'mpesa_ref' => $mpesaReceiptNumber,
+                    'result_code' => $transID,
+                    'phone_number' => $phone,
+                    'transaction_type' => 'C2B',
+                    'result_desc' => 'Mpesa C2B',
+                    'processing_status' => 0,
+                ];
+
+                $args = [
+                    //'limit' => -1,
+                    //'return' => 'ids',
+                    //'date_completed' => '2018-10-01...2020-10-10',
+                    'status' => 'cancelled'
+                ];
+                $orders = wc_get_orders($args);
+                if (!empty($orders)) {
+                    foreach ($orders as $order) {
+                        foreach ($order->get_items() as $item_id => $item_values) {
+                            $order_id = $item_values['order_id'];
+                            $order = new WC_Order($order_id);
+                            $orderTotal = (float)$order->get_total();
+                            $billingPhone = $order->get_billing_phone();
+                            //check if billing phone matches the mpesa payment phone
+                            if ($billingPhone == $phone && $amount_paid == $orderTotal) {
+                                //stop loop and proceed with the processing
+                                $tableData['order_id'] = $order_id;
+                                $tableData['amount'] = $amount_paid;
+                                //break;
+                            }
+
+                            $tableData['processing_status'] = $order->get_status();
+                        }
+                    }
+                    wp_send_json($tableData);
+                }
+
+                wp_send_json($orders);
+                $resp = [
+                    "ResultCode" => 0,
+                    "ResultDesc" => "Completed",
+                    "ThirdPartyTransID" => $transID
+                ];
+            }
+
+            wp_send_json($resp);
         }
 
         public function mpesa_confirm($transID = 0)
@@ -749,40 +849,25 @@ SQL;
 
                 $tableData = [
                     'mpesa_ref' => $mpesaReceiptNumber,
-                    'result_code' => $transID,
+                    'first_name' => $firstName,
+                    'middle_name' => $middleName,
+                    'transaction_time' => $transactionDate,
+                    'last_name' => $lastName,
+                    'amount' => $amount_paid,
+                    'result_code' => 0,
                     'phone_number' => $phone,
-                    'result_desc' => "Mpesa C2B",
+                    'transaction_type' => 'C2B',
+                    'result_desc' => 'Mpesa C2B',
                     'processing_status' => 0,
                 ];
 
-                $args = array(
-                    'limit' => -1,
-                    //'return' => 'ids',
-                    'date_completed' => '2018-10-01...2020-01-10',
-                    'status' => 'pending'
-                );
-                $orders = wc_get_orders($args);
-                foreach ($orders as $order) {
-                    foreach ($order->get_items() as $item_id => $item_values) {
-                        $order_id = $item_values['order_id'];
-                        $order = new WC_Order($order_id);
-                        $orderTotal = (float)$order->get_total();
-                        $billingPhone = $order->get_billing_phone();
-                        //check if billing phone matches the mpesa payment phone
-                        if($billingPhone==$phone){
-                            //stop loop and proceed with the processing
-                            //break;
-                        }
-
-                        wp_send_json($orderTotal==$amount_paid);
-                    }
-                }
-
-                wp_send_json($orders);
+                //insert to table then the user wil confirm later
+                $result = $this->insertToTransactionTable($tableData);
                 $resp = [
                     "ResultCode" => 0,
                     "ResultDesc" => "Completed",
-                    "ThirdPartyTransID" => $transID
+                    "ThirdPartyTransID" => $transID,
+                    'result' => $result
                 ];
             }
 
@@ -795,19 +880,173 @@ SQL;
          * @param $conditionData
          * @return bool|false|int
          */
-        public function updateTransactionTable(array $tableData, $tableName, array $conditionData)
+        public function updateTransactionTable(array $tableData, array $conditionData)
         {
             global $wpdb;
-
+            $tableName = $wpdb->prefix . 'mpesa_transactions';
             return $wpdb->update(
                 $tableName,
                 $tableData,
                 $conditionData
             );
         }
+
+        /**
+         * @param array $tableData
+         * @param $tableName
+         * @return bool|false|int
+         */
+        public function insertToTransactionTable(array $tableData)
+        {
+            global $wpdb;
+
+            $tableName = $wpdb->prefix . 'mpesa_transactions';
+
+
+            return $wpdb->insert(
+                $tableName,
+                $tableData
+            );
+        }
+
     }
 }
 
+//Process the payments
+function reu_request_payment()
+{
+    global $wpdb;
+    global $woocommerce;
+
+    $tableName = $wpdb->prefix . 'mpesa_transactions';
+
+    $resp = $_POST;
+    $orderId = $resp['order_id'];
+    $mpesaRef = $resp['mpesa_ref'];
+    $phoneNumber = $resp['phone_number'];
+    $amountPaid = $resp['amount_paid'];
+    $redirectUrl = $resp['redirect_url'];
+    $mode = $resp['mode'];
+
+    if ($mode == "stk") {
+        //query using order id
+        $query = <<<SQL
+SELECT
+	order_id,
+	phone_number,
+	transaction_time,
+	merchant_request_id,
+	checkout_request_id,
+	result_code,
+	result_desc,
+	amount,
+	processing_status,
+	created_at,
+	updated_at 
+FROM
+	$tableName 
+WHERE
+	order_id ='$orderId'
+AND
+    processing_status =  'completed'
+AND
+    amount = $amountPaid
+SQL;
+    } else {
+        $query = <<<SQL
+SELECT
+	order_id,
+	phone_number,
+	transaction_time,
+	merchant_request_id,
+	checkout_request_id,
+	result_code,
+	result_desc,
+	amount,
+	processing_status,
+	created_at,
+	updated_at 
+FROM
+	$tableName 
+WHERE
+    phone_number = '$phoneNumber'
+AND
+    mpesa_ref ='$mpesaRef'
+AND
+    amount = '$amountPaid'
+SQL;
+    }
+
+    //query the mpesa table for that particular order
+    $result = $wpdb->get_row($query);
+
+    $resp = [
+        'respCode' => 1,
+        'resp' => 'Payment request failed, please try again'
+    ];
+    if ($result != null) {
+
+        $merchantRequestID = $result->merchant_request_id;
+
+
+        if (wc_get_order($orderId)) {
+            $order = new WC_Order($orderId);
+            $first_name = $order->get_billing_first_name();
+            $last_name = $order->get_billing_last_name();
+            $customer = "{$first_name} {$last_name}";
+
+            $tableData = [
+                'mpesa_ref' => $mpesaRef,
+            ];
+
+            if ($mode == "stk") {
+                $conditionData = [
+                    'merchant_request_id' => $merchantRequestID,
+                ];
+            } else {
+                $tableData['order_id'] = $order->get_order_key();
+                $tableData['merchant_request_id'] = $order->get_order_key();
+                $tableData['checkout_request_id'] = $order->get_order_key();
+                $tableData['result_code'] = 0;
+                $tableData['processing_status'] = 'completed';
+
+
+                $conditionData = [
+                    'phone_number' => $phoneNumber,
+                    'mpesa_ref' => $mpesaRef,
+                    'amount' => $amountPaid,
+                ];
+            }
+
+//            wp_send_json($tableData);
+            $updateResult = $wpdb->update(
+                $tableName,
+                $tableData,
+                $conditionData
+            );
+            if ($updateResult) {
+
+                $currency = get_woocommerce_currency();
+                $order->payment_complete();
+                $order->update_status('completed');
+                $order->add_order_note("{$customer} {$phoneNumber} has fully paid {$currency} {$amountPaid}. Receipt Number {$mpesaRef}");
+
+                $woocommerce->cart->empty_cart();
+                $resp = [
+                    'respCode' => 0,
+                    'checkout' => $redirectUrl,
+                    'resp' => 'Payment completed successfully'
+                ];
+
+            } else {
+                $order->update_status('failed');
+                $order->add_order_note("M-PESA Payment from {$phoneNumber} has failed");
+            }
+        }
+    }
+
+    wp_send_json($resp);
+}
 
 //Create Table for M-PESA Transactions
 function create_mpesa_transactions_table()
@@ -833,15 +1072,16 @@ CREATE TABLE IF NOT EXISTS $table_name (
 		transaction_time datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
 		merchant_request_id varchar(150) DEFAULT NULL,
 		checkout_request_id varchar(150) DEFAULT NULL,
-		result_code varchar(150) DEFAULT NULL,
+		result_code varchar(150) DEFAULT 0,
 		result_desc varchar(200) DEFAULT NULL,
 		amount decimal(10,2) DEFAULT NULL,
-		mpesa_ref varchar(120) DEFAULT NULL,
+		mpesa_ref varchar(120) NOT NULL,
 		currency varchar(4) DEFAULT 'KES' NULL,
 		processing_status varchar(20) DEFAULT '0' NULL,
 		transaction_type varchar(20) DEFAULT 'STK' NULL,
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY mpesa_ref (mpesa_ref),
 		PRIMARY KEY  (id) using BTREE
 		)ENGINE=InnoDB $charset_collate
 SQL;
@@ -852,155 +1092,5 @@ SQL;
     dbDelta($sql);
 
     add_option('transaction_db_version', $transaction_db_version);
-
-}
-
-//Process the payments
-function reu_request_payment()
-{
-    global $wpdb;
-
-    if (isset($_SESSION['ReqID'])) {
-
-
-        $table_name = $wpdb->prefix . 'mpesa_transactions';
-
-        $trx_count = $wpdb->get_var("SELECT COUNT(*) FROM $table_name WHERE merchant_request_id = '" . $_SESSION['ReqID'] . "' and processing_status = 0");
-
-        //If it exists do not allow the transaction to proceed to the next step
-
-        if ($trx_count > 0) {
-
-            echo json_encode(array("rescode" => "99", "resmsg" => "A similar transaction is in progress, to check its status click on Confirm Order button"));
-
-            exit();
-
-        }
-
-    }
-
-    $total = $_SESSION['total'];
-
-    $url = $_SESSION['credentials_endpoint'];
-
-
-    $YOUR_APP_CONSUMER_KEY = $_SESSION['ck'];
-
-    $YOUR_APP_CONSUMER_SECRET = $_SESSION['cs'];
-
-    $credentials = base64_encode($YOUR_APP_CONSUMER_KEY . ':' . $YOUR_APP_CONSUMER_SECRET);
-
-
-    //Request for access token
-
-
-    $token_response = wp_remote_get($url, array('headers' => array('Authorization' => 'Basic ' . $credentials)));
-
-
-    $token_array = json_decode('{"token_results":[' . $token_response['body'] . ']}');
-
-
-    if (array_key_exists("access_token", $token_array->token_results[0])) {
-
-        $access_token = $token_array->token_results[0]->access_token;
-
-    } else {
-
-        echo json_encode(array("rescode" => "1", "resmsg" => "Error, unable to send payment request"));
-
-        exit();
-
-    }
-
-
-    ///If the access token is available, start lipa na mpesa process
-
-    if (array_key_exists("access_token", $token_array->token_results[0])) {
-
-
-        ////Starting lipa na mpesa process
-
-        $url = $_SESSION['payments_endpoint'];
-
-
-        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
-
-        $domainName = $_SERVER['HTTP_HOST'] . '/';
-
-        $callback_url = $protocol . $domainName;
-
-
-        //Generate the password//
-
-        $shortcd = $_SESSION['shortcode'];
-
-        $timestamp = date("YmdHis");
-
-        $b64 = $shortcd . $_SESSION['passkey'] . $timestamp;
-
-        $pwd = base64_encode($b64);
-
-
-        ///End in pwd generation//
-
-
-        $curl_post_data = array(
-
-            //Fill in the request parameters with valid values
-
-            'BusinessShortCode' => $shortcd,
-
-            'Password' => $pwd,
-
-            'Timestamp' => $timestamp,
-
-            'TransactionType' => 'CustomerPayBillOnline',
-
-            'Amount' => $total,
-
-            'PartyA' => $_SESSION['tel'],
-
-            'PartyB' => $shortcd,
-
-            'PhoneNumber' => $_SESSION['tel'],
-
-            'CallBackURL' => $callback_url . '/index.php?callback_action=1',
-
-            'AccountReference' => time(),
-
-            'TransactionDesc' => 'Sending a lipa na mpesa request'
-
-        );
-
-
-        $data_string = json_encode($curl_post_data);
-
-
-        $response = wp_remote_post($url, array('headers' => array('Content-Type' => 'application/json', 'Authorization' => 'Bearer ' . $access_token),
-
-            'body' => $data_string));
-
-
-        $response_array = json_decode('{"callback_results":[' . $response['body'] . ']}');
-
-
-        if (array_key_exists("ResponseCode", $response_array->callback_results[0]) && $response_array->callback_results[0]->ResponseCode == 0) {
-
-            $_SESSION['ReqID'] = $response_array->callback_results[0]->MerchantRequestID;
-            echo json_encode(array("rescode" => "0", "resmsg" => "Request accepted for processing, check your phone to enter M-PESA pin"));
-
-
-        } else {
-
-            echo json_encode(array("rescode" => "1", "resmsg" => "Payment request failed, please try again"));
-
-
-        }
-
-        exit();
-
-
-    }
-
 
 }
