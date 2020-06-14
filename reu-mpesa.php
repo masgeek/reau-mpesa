@@ -937,10 +937,7 @@ SELECT
     mpesa_ref,
 	result_code,
 	result_desc,
-	amount,
-	processing_status,
-	created_at,
-	updated_at 
+	amount
 FROM
 	$tableName 
 WHERE
@@ -960,10 +957,7 @@ SELECT
 	checkout_request_id,
 	result_code,
 	result_desc,
-	amount,
-	processing_status,
-	created_at,
-	updated_at 
+	amount
 FROM
 	$tableName 
 WHERE
