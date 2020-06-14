@@ -346,7 +346,8 @@ function reu_init_gateway_class()
             $manualInstructions .= <<<MANUAL
 <ol>
 <li>Go to the M-PESA menu on your phone</li>
-<li>Select BuyGoods Option : Enter Till Number: <strong>$this->shortcode</strong></li>
+<li>Choose Lipa na M-PESA</li>
+<li>Select Buy Goods and Services Option : Enter Till Number: <strong>$this->shortcode</strong></li>
 <li>Enter the EXACT amount (KSh. <strong>$amnt</strong> )</li>
 <li>Enter your PIN and then send the money</li>
 <li>Complete your transaction on your phone</li>
@@ -933,6 +934,7 @@ SELECT
 	transaction_time,
 	merchant_request_id,
 	checkout_request_id,
+    mpesa_ref,
 	result_code,
 	result_desc,
 	amount,
@@ -980,7 +982,7 @@ SQL;
 
     $resp = [
         'respCode' => 1,
-        'resp' => 'Payment request failed, please try again'
+        'resp' => 'Payment confirmation failed, please try again'
     ];
     if ($result != null) {
 
@@ -994,10 +996,12 @@ SQL;
             $customer = "{$first_name} {$last_name}";
 
             $tableData = [
-                'mpesa_ref' => $mpesaRef,
+                'result_code' => 0
             ];
 
             if ($mode == "stk") {
+                $mpesaRef = $result->mpesa_ref;
+                $tableData['processing_status'] = 'reconciled';
                 $conditionData = [
                     'merchant_request_id' => $merchantRequestID,
                 ];
@@ -1016,18 +1020,19 @@ SQL;
                 ];
             }
 
-//            wp_send_json($tableData);
+
             $updateResult = $wpdb->update(
                 $tableName,
                 $tableData,
                 $conditionData
             );
-            if ($updateResult) {
+
+            if ($updateResult == 1) {
 
                 $currency = get_woocommerce_currency();
                 $order->payment_complete();
                 $order->update_status('completed');
-                $order->add_order_note("{$customer} {$phoneNumber} has fully paid {$currency} {$amountPaid}. Receipt Number {$mpesaRef}");
+                $order->add_order_note("{$customer} {$phoneNumber} has fully paid {$currency} {$amountPaid} and confirmed. Receipt Number {$mpesaRef}");
 
                 $woocommerce->cart->empty_cart();
                 $resp = [
@@ -1037,6 +1042,10 @@ SQL;
                 ];
 
             } else {
+                $resp = [
+                    'respCode' => 1,
+                    'resp' => 'Unable to process payment confirmation, please try again'
+                ];
                 $order->update_status('failed');
                 $order->add_order_note("M-PESA Payment from {$phoneNumber} has failed");
             }
