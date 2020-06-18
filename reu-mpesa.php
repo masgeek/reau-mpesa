@@ -756,74 +756,15 @@ SQL;
          * @deprecated
          *
          */
-        public function mpesa_confirm_old($transID = 0)
+        public function mpesa_validate($transID = 0)
         {
-            $response = file_get_contents('php://input');
-            $callbackData = json_decode($response);
+            $successResp = [
+                "ResultCode" => 0,
+                "ResultDesc" => "Completed",
+                "ThirdPartyTransID" => 0
+            ];
 
-            if (!isset($callbackData->TransID)) {
-                $resp = [
-                    "ResultCode" => 1,
-                    "ResultDesc" => "Failed",
-                    "ThirdPartyTransID" => $transID
-                ];
-            } else {
-
-                $amount_paid = $callbackData->TransAmount;
-                $mpesaReceiptNumber = $callbackData->TransID;
-                $balance = $callbackData->OrgAccountBalance;
-                $transactionDate = $callbackData->TransTime;
-                $phone = $callbackData->MSISDN;
-                $firstName = $callbackData->FirstName;
-                $middleName = $callbackData->MiddleName;
-                $lastName = $callbackData->LastName;
-
-                $tableData = [
-                    'mpesa_ref' => $mpesaReceiptNumber,
-                    'result_code' => $transID,
-                    'phone_number' => $phone,
-                    'transaction_type' => 'C2B',
-                    'result_desc' => 'Mpesa C2B',
-                    'processing_status' => 0,
-                ];
-
-                $args = [
-                    //'limit' => -1,
-                    //'return' => 'ids',
-                    //'date_completed' => '2018-10-01...2020-10-10',
-                    'status' => 'cancelled'
-                ];
-                $orders = wc_get_orders($args);
-                if (!empty($orders)) {
-                    foreach ($orders as $order) {
-                        foreach ($order->get_items() as $item_id => $item_values) {
-                            $order_id = $item_values['order_id'];
-                            $order = new WC_Order($order_id);
-                            $orderTotal = (float)$order->get_total();
-                            $billingPhone = $order->get_billing_phone();
-                            //check if billing phone matches the mpesa payment phone
-                            if ($billingPhone == $phone && $amount_paid == $orderTotal) {
-                                //stop loop and proceed with the processing
-                                $tableData['order_id'] = $order_id;
-                                $tableData['amount'] = $amount_paid;
-                                //break;
-                            }
-
-                            $tableData['processing_status'] = $order->get_status();
-                        }
-                    }
-                    wp_send_json($tableData);
-                }
-
-                wp_send_json($orders);
-                $resp = [
-                    "ResultCode" => 0,
-                    "ResultDesc" => "Completed",
-                    "ThirdPartyTransID" => $transID
-                ];
-            }
-
-            wp_send_json($resp);
+            wp_send_json($successResp);
         }
 
         public function mpesa_confirm($transID = 0)
@@ -867,8 +808,7 @@ SQL;
                 $resp = [
                     "ResultCode" => 0,
                     "ResultDesc" => "Completed",
-                    "ThirdPartyTransID" => $transID,
-                    'result' => $result
+                    "ThirdPartyTransID" => 0,
                 ];
             }
 
